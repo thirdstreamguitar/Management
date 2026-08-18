@@ -81,7 +81,7 @@ right now saves a round trip:
 
 ```bash
 cp .env.example .env
-# paste the token after IG_ACCESS_TOKEN=
+# paste the token after IG_ACCESS_TOKEN=b66b51189b713c89dfd3baf93c0bdbf7
 ```
 
 **Do not paste the token into a chat window or a prompt.** It is equivalent to
