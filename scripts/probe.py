@@ -47,6 +47,39 @@ CANDIDATE_ACCOUNT_METRICS = [
 TIMEOUT = 30
 
 
+# ---------------------------------------------------------------- env
+
+def load_dotenv(path=None):
+    """
+    Read KEY=VALUE lines from .env into os.environ. A real shell export always
+    wins, so this never silently overrides what you set deliberately.
+
+    utf-8-sig because Windows Notepad writes a BOM by default, and a BOM glued
+    to the front of a token produces "Cannot parse access token" from Graph --
+    an error that looks like a bad token and is actually a bad file encoding.
+    """
+    here = Path(__file__).resolve().parent
+    candidates = [Path(path)] if path else [
+        here.parent / ".env",   # repo root -- where it belongs
+        here / ".env",          # scripts/ -- common mistake, accept it anyway
+        Path.cwd() / ".env",    # wherever you launched from
+    ]
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        for raw in candidate.read_text(encoding="utf-8-sig").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and val and key not in os.environ:
+                os.environ[key] = val
+        return candidate
+    return None
+
+
 # ---------------------------------------------------------------- http
 
 
@@ -257,9 +290,11 @@ def line(label, value, indent=2):
 
 
 def main():
+    load_dotenv()
     token = os.environ.get("IG_ACCESS_TOKEN", "").strip()
     if not token:
-        sys.exit("IG_ACCESS_TOKEN is not set. See docs/phase-0-setup.md step 5.")
+        sys.exit("IG_ACCESS_TOKEN is not set (checked .env and the environment). "
+                 "See docs/phase-0-setup.md step 5.")
 
     print("\n\033[1mThird Stream -- Phase 0 capability probe\033[0m")
     print("=" * 62)

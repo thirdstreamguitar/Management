@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from probe import call, err_text  # noqa: E402  (same-dir helper reuse)
+from probe import call, err_text, load_dotenv  # noqa: E402  (same-dir helper reuse)
 
 import os  # noqa: E402
 
@@ -147,9 +147,10 @@ def main():
                     help="re-walk all history instead of stopping at the newest known post")
     args = ap.parse_args()
 
+    load_dotenv()
     token = os.environ.get("IG_ACCESS_TOKEN", "").strip()
     if not token:
-        sys.exit("IG_ACCESS_TOKEN is not set.")
+        sys.exit("IG_ACCESS_TOKEN is not set (checked .env and the environment).")
 
     caps, metrics = load_caps()
     version = caps["graph_version"]
