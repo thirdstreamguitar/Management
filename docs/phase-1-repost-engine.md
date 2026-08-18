@@ -148,10 +148,22 @@ eligible IF
 All components normalized to 0–1 across the eligible set (min-max over the cohort, so the weights mean something):
 
 ```
-score =  0.4375 × norm(shares / reach)            -- sends: top-weighted 2026 signal
+score =  0.4375 × norm(shares / views)            -- sends: top-weighted 2026 signal
        + 0.3125 × norm(avg_watch_s / duration_s)  -- retention ratio
-       + 0.2500 × norm(saved / reach)
+       + 0.2500 × norm(saved / views)
 ```
+
+> **Denominator is `views`, not `reach` — this one is not optional.** `reach` is
+> corrupt for reels posted before ~early 2024: 36 of 141 report more likes than
+> reach (2022 median `reach=11` against `views=1843`). Dividing by it inflates
+> those rows ~100×; their mean `saved/reach` is 24.50% against 0.34% for sane
+> rows, with a maximum of 130%. Since `norm()` is min-max over the cohort, the
+> maximum sets the scale — **those 36 reels would have taken the top of the queue
+> and pushed all 88 legitimate candidates toward zero.** `views` is clean across
+> all 141. Full numbers in [`reports/phase-0-findings.md`](../reports/phase-0-findings.md).
+>
+> Add the gate `likes <= reach <= views` before scoring anyway. `views` fixes the
+> corruption we found; the gate catches what we have not.
 
 Deliberately **not** in the formula: raw reach, and likes. Raw reach is confounded by how much distribution Instagram happened to give it that week. Likes are the weakest 2026 signal and including them would bias toward crowd-pleasing content that doesn't convert.
 
@@ -212,6 +224,18 @@ For each queued video, Studio produces:
 | **Cover** | Different frame | Does the still matter, or is it all in the first second of motion |
 | **Caption angle** | Teaching vs story vs invitation | Which register drives sends |
 | **Length** | Trimmed tighter | Does retention ratio beat total watch time |
+
+> **Test Length first.** Phase 0 found median watch time is ~6–12 seconds
+> *regardless of reel duration* — viewers give a roughly fixed budget, so a
+> 120-second reel just divides the same attention by a bigger number.
+> `duration` vs `retention ratio` correlates at −0.66. Median duration in this
+> library is 48.4s; the 0–15s bucket has both the highest median retention
+> (0.48 vs 0.17 overall) **and** the highest median reach.
+>
+> That makes trimming the cheapest, highest-expected-value experiment available,
+> and it is confounder-free in a way the others are not: shortening a reel does
+> not change the content, only the denominator. Run it before spending trials on
+> hook or cover variants.
 
 **Change one axis at a time.** Two changes and you learn nothing about either. The queue interleaves so you're not testing hooks for three straight weeks.
 

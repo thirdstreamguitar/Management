@@ -52,11 +52,30 @@ So the system tracks **four ratios**, not raw counts:
 
 | Metric | Formula | Why it matters | Target | Level |
 |---|---|---|---|---|
-| **Sends per reach** | `shares ÷ reach` | Mosseri has confirmed DM sends are the most heavily weighted Reels signal in 2026 — roughly 3–5× a like. This is *the* growth lever. | > 1.0% | per post |
-| **Retention ratio** | `avg_watch_time ÷ video_duration` | Total watch time + replay rate is the #1 Reels ranking factor. | > 0.75 | per post |
-| **Saves per reach** | `saved ÷ reach` | Saves rank second only to sends in 2026. Per-post and available — this carries the weight that profile conversion was meant to. | > 0.8% | per post |
+| **Sends per view** | `shares ÷ views` | Mosseri has confirmed DM sends are the most heavily weighted Reels signal in 2026 — roughly 3–5× a like. This is *the* growth lever. | > 0.10% (p75)<br>> 0.22% = top decile | per post |
+| **Retention ratio** | `avg_watch_time ÷ video_duration` | Total watch time + replay rate is the #1 Reels ranking factor. | > 0.31 (p75)<br>> 0.44 = top decile | per post |
+| **Saves per view** | `saved ÷ views` | Saves rank second only to sends in 2026. Per-post and available — this carries the weight that profile conversion was meant to. | > 0.24% (p75)<br>> 0.38% = top decile | per post |
 | **Profile conversion** | `profile_views ÷ reach` | Measures whether the content makes people curious about *you*, not just the clip. | > 1.5% | **account/day only** |
 | **Follow efficiency** | `follower_count` delta ÷ `profile_views` | Measures whether your profile/bio closes. Fix the bio, not the content, when this is low. | > 8% | **account/day only** |
+
+> **Denominator changed from `reach` to `views`, 2026-08-18.** `reach` is
+> **corrupt for reels posted before ~early 2024** — 36 of 141 report more likes
+> than reach, which is impossible; 2022 reels show `reach≈11` against
+> `views≈1843`. Any ratio dividing by reach is inflated ~100× on those rows, and
+> because the scorer min-max normalises, they would have monopolised the repost
+> queue while flattening every legitimate candidate. `views` is clean across all
+> 141 reels. Evidence: [`reports/phase-0-findings.md`](../reports/phase-0-findings.md).
+>
+> Note the semantic shift: *per view* counts replays, *per reach* counts unique
+> accounts. For ranking it makes little difference; for reading these as human
+> rates it does, hence the relabelling rather than a silent swap.
+>
+> **Targets replaced with this account's measured distribution.** The originals
+> (>1.0% sends, >0.75 retention, >0.8% saves) came from general short-form advice
+> and do not describe this library: **1 reel in 139 has ever hit 0.75 retention**,
+> and 5 in 139 cleared 1.0% sends. The p75 / p90 figures above are real bars from
+> 139 reels — reaching p75 means beating three quarters of your own back
+> catalogue. Recompute them annually; they should move as the account changes.
 
 > **Corrected 2026-08-18 by the Phase 0 probe.** The last two were originally
 > specified per-post, as `profile_visits ÷ reach` and `follows ÷ profile_visits`.
@@ -245,9 +264,12 @@ Measuring non-follower reach through the API is awkward — the follower/non-fol
 Score every eligible past video:
 
 ```
-score =  0.4375 × normalized(sends ÷ reach)
+score =  0.4375 × normalized(sends ÷ views)
        + 0.3125 × normalized(avg_watch_time ÷ duration)
-       + 0.2500 × normalized(saves ÷ reach)
+       + 0.2500 × normalized(saves ÷ views)
+
+eligibility gate, before scoring:
+       likes <= reach <= views        -- drops rows with corrupt reach
 ```
 
 > **Corrected 2026-08-18 by the Phase 0 probe.** The original formula carried a
@@ -515,4 +537,12 @@ These were written as open questions because `developers.facebook.com` and `inst
 
 9. **The reel library is 141 posts, not 552** — of which 124 are ≥90 days old and carry every surviving scorer input. That, not the raw media count, is the repost engine's candidate pool.
 
-10. **`duration_s` is not available from the API at all** — no Instagram media field exposes video duration, so the retention term (31% of the scorer) cannot be computed without reading the source files locally with `ffprobe`. See `reports/phase-0-findings.md`.
+10. **`duration_s` is not available from the API** — no Instagram media field exposes video duration. Solved by `scripts/durations.py`, which reads it from the MP4 header served at `media_url` over HTTP range requests. 139/141 reels resolved. No local library needed.
+
+11. **`reach` is corrupt for reels older than ~early 2024** — 36 of 141 report more likes than reach. Every ratio dividing by reach is inflated ~100× on those rows, and would have handed them the top of the repost queue. Scorer denominators switched to `views`, which is clean across the whole library. **This is the finding that would have done the most damage undetected**, and no capability probe could have caught it: the metric is supported, returns a number, and the number is wrong.
+
+12. **The §1 performance targets were unachievable** — 1 reel in 139 ever hit the 0.75 retention target. Replaced with this account's measured p75/p90.
+
+13. **Watch time is ~6–12s regardless of reel length** (median duration 48.4s, median watch 7.7s; `duration` vs retention `r = −0.66`). Retention ratio is substantially a shortness proxy, and trimming is the cheapest experiment in Phase 1.
+
+14. **Token expiry measured: 2026-10-17** (59.9 days), via `scripts/refresh_token.py`.

@@ -16,9 +16,10 @@ defeat the point of running it.
 | | |
 |---|---|
 | **Phase 1 path** | **API path.** `trial_params` was accepted. Not the assisted-manual fallback. |
-| **Scorer** | **Broken as specified.** `profile_visits` is unavailable per-media. One of four inputs is gone. |
+| **Scorer** | **Broken as specified**, three ways: `profile_visits` does not exist per-media; `duration_s` is not an API field (solved — see below); and **`reach` is corrupt for 36 of 141 reels**, which would have handed the repost queue to the wrong videos. |
 | **Gates** | Both pass — 1,676 followers (≥1,000), account type `MEDIA_CREATOR`. |
-| **Token** | Expiry **not measurable** on this route without mutating the token. |
+| **Token** | **59.9 days — expires 2026-10-17.** Measured, not inferred. |
+| **Targets** | §1's performance targets are unachievable at this account's video lengths. 1 reel in 139 has ever hit the 0.75 retention target. |
 
 ---
 
@@ -210,10 +211,17 @@ GET /refresh_access_token?grant_type=ig_refresh_token&access_token=...
 which **issues a new token** and is therefore a mutation. `probe.py` promises to
 modify nothing, so it does not call it and reports the gap instead.
 
-What can be said without measuring: Instagram long-lived tokens last **60 days
-from issue** and are refreshable any time after the first 24 hours. This token
-was generated during Part A on or about 2026-08-18, which puts expiry near
-**2026-10-17** — an *inference from the issue date*, not a reading from the API.
+**MEASURED 2026-08-18 via `scripts/refresh_token.py`:**
+
+```
+expires_in     5178316 seconds
+days remaining 59.9
+expires on     2026-10-17
+```
+
+The token was refreshed and verified as `@fupingryuguitar` before being written,
+so this is a reading from the API rather than an inference from the issue date.
+**Re-run before 2026-10-17.**
 
 To convert that into a fact, run the refresh call deliberately and record the
 returned `expires_in`, then write the new token to `.env`. That call is also the
@@ -349,6 +357,141 @@ divide cleanly by either `views` or `reach` to reproduce
 `ig_reels_avg_watch_time` (4317226 / 480 ≈ 8994ms, / 238 ≈ 18139ms, against a
 reported 14536ms). The two are computed over different denominators. Do not
 derive one from the other.
+
+---
+
+## CRITICAL: `reach` is corrupt for reels older than ~early 2024
+
+Running the durations job made the scorer computable for the first time, and
+computing it surfaced a data problem that would have shipped silently.
+
+**36 of the 141 reels report more likes than reach**, which is physically
+impossible — reach counts unique accounts, likes are a subset of them. Median
+`reach` by year:
+
+| Year | n | median reach | median views | median likes | likes > reach |
+|---|---|---|---|---|---|
+| 2022 | 23 | **11** | 1,843 | 53 | 22/23 |
+| 2023 | 12 | **18** | 600 | 37 | 12/12 |
+| 2024 | 16 | 192 | 706 | 35 | 2/16 |
+| 2025 | 27 | 463 | 750 | 33 | 0/27 |
+| 2026 | 63 | 466 | 696 | 29 | 0/63 |
+
+A 2022 reel reporting `reach=14`, `views=1629`, `likes=46` is not a reel that
+reached 14 people. The `reach` field is returning something else for older
+media — a recent-window figure, or a degraded value — and it is wrong by roughly
+two orders of magnitude.
+
+### Why this would have wrecked the repost queue
+
+Two of the scorer's three terms divide by reach. On the corrupt rows the
+denominator is ~100× too small, so the ratios explode:
+
+| | n | mean `saved/reach` | max |
+|---|---|---|---|
+| Corrupt rows (likes > reach) | 36 | **24.50%** | 130.00% |
+| Sane rows | 88 | 0.34% | 5.03% |
+
+**71× the mean, and a maximum of 130% — a reel "saved by more people than saw
+it".** The scorer min-max normalises across the eligible cohort, so the maximum
+sets the scale. These 36 rows would have taken the top of the repost queue *and*
+compressed all 88 legitimate candidates toward zero on that term. The queue would
+have looked plausible and been almost entirely wrong.
+
+Worth being clear: nothing about the probe would have caught this. The metric
+is *supported*, it returns a number, and the number is garbage.
+
+### The fix: use `views` as the denominator
+
+`views` is sane across the entire library — **zero** of 141 reels report more
+likes than views. Recomputing the same reels with views as the denominator:
+
+| | mean `saved/views` | max |
+|---|---|---|
+| Rows that were corrupt-by-reach | 0.19% | 0.77% |
+| Sane rows | 0.12% | 0.50% |
+
+The anomaly disappears completely. It was the field, not the reels.
+
+**Recommended amendment (a decision, flagged as such):** switch the scorer's
+denominators from `reach` to `views`, and add a data-quality gate that drops any
+row failing `likes ≤ reach ≤ views`. Both, not either — views fixes the known
+corruption, the gate catches whatever else Meta's historical data is hiding.
+
+The semantic cost is real and should be stated: *sends per view* is not *sends
+per person reached*, because views counts replays. For **ranking** — which is all
+the scorer does — the distinction barely matters, and it arguably suits reels
+better since replays are themselves a positive signal. For the §1 headline
+ratios, which are meant to be read as human-legible rates, it does matter, and
+they should be labelled per-view rather than quietly redefined.
+
+Pool impact: requiring trustworthy reach would cut the eligible set from 124 to
+**87**. Using views keeps **139**.
+
+---
+
+## The plan's performance targets are not achievable at this account's video lengths
+
+With durations available, the four §1 targets can be checked against reality for
+the first time. n = 139 reels:
+
+| Metric | p25 | median | p75 | p90 | Plan target | Reels clearing it |
+|---|---|---|---|---|---|---|
+| Sends per reach | 0.00% | 0.00% | 0.17% | 0.43% | > 1.0% | **5/139** |
+| Saves per reach | 0.00% | 0.22% | 0.81% | 17.33%¹ | > 0.8% | 36/139 |
+| Retention ratio | 0.13 | 0.17 | 0.31 | 0.44 | > 0.75 | **1/139** |
+
+¹ inflated by the corrupt-reach rows above.
+
+**The 0.75 retention target is unreachable — one reel in 139 has ever hit it.**
+That target was taken from general advice about short-form video; it does not
+describe this library.
+
+### Why, and it is actionable
+
+Median reel duration is **48.4s**. Median watch time is **7.7s**. And watch time
+is remarkably flat regardless of length:
+
+| Duration bucket | n | median retention | median watch | median reach |
+|---|---|---|---|---|
+| 0–15s | 13 | **0.48** | 5.7s | 423 |
+| 15–30s | 19 | 0.34 | 7.0s | 431 |
+| 30–60s | 58 | 0.19 | 7.8s | 391 |
+| 60–120s | 45 | 0.11 | 8.6s | 338 |
+| 120s+ | 4 | 0.08 | 11.9s | 162 |
+
+Viewers give roughly **6–12 seconds no matter how long the reel is.** A 120-second
+reel does not earn proportionally more attention; it just divides the same ~8
+seconds by a larger number. `duration` vs `retention ratio` correlates at
+**−0.66** — the retention term is substantially a proxy for *shortness*.
+
+That has a direct consequence for the scorer: giving retention 0.3125 weight
+gives "is this reel short" 0.3125 weight. Defensible — shorter probably *is*
+better here — but it should be a deliberate choice, not an accident, and the
+§4 **Length** variant axis is the cheapest experiment in the whole plan. The
+`0–15s` bucket shows the highest median retention *and* the highest median
+reach.
+
+### A caution against overreading this
+
+Correlations with historical reach are weak across the board (retention→reach
+`+0.15`, sends-per-reach→reach `+0.07`, absolute watch time→reach `−0.09`). It
+would be easy to conclude the scorer's inputs do not predict anything. **Do not
+conclude that yet**, for three reasons:
+
+1. Historical reach is mostly *follower*-driven and confounded by however much
+   distribution Instagram gave a post that week — the plan says exactly this in
+   §3, which is why raw reach was excluded from the formula in the first place.
+2. The scorer is not trying to predict historical reach. It predicts which old
+   video will acquire *strangers* as a trial reel. Trials are the clean
+   measurement (§6.2); this data is not.
+3. A quarter of the reach values are corrupt, which poisons every correlation
+   that touches reach.
+
+The honest position: these numbers are not evidence the scorer is wrong, and not
+evidence it is right. They are the **baseline to validate against after ~40
+trials**, which the plan already schedules. Recorded here so that comparison is
+possible.
 
 ---
 
