@@ -218,7 +218,23 @@ was generated during Part A on or about 2026-08-18, which puts expiry near
 To convert that into a fact, run the refresh call deliberately and record the
 returned `expires_in`, then write the new token to `.env`. That call is also the
 first half of the refresh automation the plan already flags as a single point of
-failure (§13, "Token hygiene"). Building it is a Phase 1 task, not a Phase 0 one.
+failure (§13, "Token hygiene").
+
+**`scripts/refresh_token.py` does this**, built to be safe about it since it
+mutates account credentials:
+
+1. refuses to run without `--yes`
+2. backs up `.env` first (`.env.*` is gitignored, so backups cannot be committed)
+3. **verifies the new token with a live call before writing it anywhere**
+4. rewrites only the `IG_ACCESS_TOKEN` line, preserving comments and other keys
+5. never prints a token
+
+If any step fails, `.env` is untouched and the existing token stays valid. All
+four paths — no-flag, API failure, verification failure, success — are exercised
+and behave correctly.
+
+Running it answers Q4 exactly rather than by inference, and re-running it before
+each expiry is the whole of the refresh job until it gets scheduled.
 
 ---
 
@@ -298,20 +314,28 @@ That is **31% of the scorer weight**, on top of the 20% already lost with
 `profile_visits`. Between them, half the originally-specified formula cannot be
 computed from API data alone.
 
-**This is recoverable, unlike `profile_visits`.** Duration is a property of the
-video file, not of Instagram, so it can be read locally with `ffprobe` over
-`library/` — which the plan already requires to exist for the source-file
-eligibility filter (§3: `source_file_exists == true`). The retention term is
-therefore *blocked on the library being populated and matched to media ids*, not
-lost. Until that mapping exists, the scorer runs on two terms and must say so
-rather than silently dividing by nothing.
+**SOLVED — and my first recommendation here was wrong.**
 
-**Recommended for Phase 1, flagged as a decision not a finding:** do not reweight
-again. Build the `library/` ↔ `media_id` mapping first and recover the retention
-term, because retention is the second-strongest signal in the whole model and
-guessing around it would gut the scorer. If the mapping proves impractical, then
-reweight to `shares` 0.64 / `saved` 0.36 and record that the model is now a
-two-signal proxy.
+I originally wrote that this was blocked on building a `library/` ↔ `media_id`
+mapping and reading durations off the local source files with `ffprobe`. That
+was unnecessary. The API already returns **`media_url`** — a direct link to the
+video file Instagram is serving — and `backfill.py` was requesting that field
+and discarding it. An MP4 states its own duration in the `mvhd` box, so the
+duration can be read straight from the file over HTTP range requests, typically
+32–96 KB per video rather than a download.
+
+`scripts/durations.py` does this: pulls `media_url` per media, reads the MP4
+header, writes `duration_s` into `posts.db`. No local library, no filename
+matching, no `ffprobe` dependency (pure stdlib parse, with `ffprobe` used only
+as a fallback if it happens to be installed).
+
+**The retention term is therefore recoverable now, and the scorer keeps all
+three of its surviving inputs.** No second reweighting is needed.
+
+The `library/` mapping is still required eventually — §3's
+`source_file_exists` eligibility filter needs it, and the Studio department
+needs it to cut variants — but it is no longer on the critical path for
+scoring.
 
 ### Unit trap in the schema
 

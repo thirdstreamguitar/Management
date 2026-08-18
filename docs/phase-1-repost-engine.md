@@ -182,16 +182,15 @@ Deliberately **not** in the formula: raw reach, and likes. Raw reach is confound
 > video duration**. `avg_watch_s / duration_s` therefore has no denominator, and
 > that is 31% of the weight above.
 >
-> Duration is a property of the file, not of Instagram, so it is recoverable:
-> read it locally with `ffprobe` over `library/`, which this section already
-> requires to exist for the `source_file_exists` filter. **Build the
-> `library/` ↔ `media_id` mapping before the scorer, not after** — retention is
-> the second-strongest signal in the model and reweighting around it would leave
-> a two-signal proxy doing work the design does not intend.
+> **Resolved by `scripts/durations.py`.** The API returns `media_url`, a direct
+> link to the video file, and an MP4 declares its own duration in the `mvhd`
+> box — so duration is read over HTTP range requests (~32–96 KB per video, not a
+> download) and written into `posts.db`. No `library/` mapping and no `ffprobe`
+> dependency; the parse is stdlib, with `ffprobe` only as a fallback.
 >
-> If that mapping turns out to be impractical, the fallback is `shares` 0.64 /
-> `saved` 0.36 — and the repost queue must then state on its face that it is
-> ranking on two signals, so nobody reads it as the full model.
+> Run `python scripts/durations.py` after every backfill. The `library/` mapping
+> is still needed for the `source_file_exists` filter below and for Studio, but
+> it is no longer on the critical path for scoring.
 >
 > **Units:** `ig_reels_avg_watch_time` is returned in **milliseconds**
 > (sample: `14536` = 14.5s). Dividing it by a duration in seconds inflates the
