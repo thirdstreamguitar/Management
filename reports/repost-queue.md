@@ -1,0 +1,115 @@
+# Repost queue
+
+**Generated:** 2026-08-18 13:42 UTC · **Source:** `/home/user/Management/data/posts.db` · **Cohort:** 87 eligible of 141 reels
+
+Ranked by likelihood of acquiring non-followers when re-cut and republished as a trial reel. Spec: [`docs/phase-1-repost-engine.md`](../docs/phase-1-repost-engine.md) §3.
+
+```
+score = 0.4375 x norm(shares / views)            <- sends
+      + 0.3125 x norm(avg_watch_s / duration_s)  <- retention
+      + 0.2500 x norm(saved / views)             <- saves
+```
+
+Every number below is shown so the ranking can be checked by eye: the raw rate, its min-max normalised value, and the weighted total. `score` should equal `0.4375·nSend + 0.3125·nRet + 0.25·nSave`.
+
+## Cohort funnel
+
+| Stage | Count |
+|---|---:|
+| Reels in library | 141 |
+| — younger than 90 days | −17 |
+| — no insight snapshot | −0 |
+| — no `duration_s` | −1 |
+| — missing a scorer input | −0 |
+| — zero views | −0 |
+| — **failed gate** `likes ≤ reach ≤ views` | −36 |
+| **Eligible cohort** | **87** |
+
+## Normalisation ranges
+
+Min-max is taken across the eligible cohort, so these bounds define the 0–1 scale. A cohort change moves every score.
+
+| Term | Min | Max | Note |
+|---|---:|---:|---|
+| `shares / views` | 0.000% | 1.341% |  |
+| `avg_watch_s / duration_s` | 0.070 | 0.718 |  |
+| `saved / views` | 0.000% | 0.503% |  |
+
+## Top 20
+
+| # | Posted | Reel | views | shares | saved | likes | reach | dur s | watch s | shares/views | nSend | retention | nRet | saved/views | nSave | **score** |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 2026-04-11 | [500135](https://www.instagram.com/reel/DW_8CAqonwA/) | 820 | 11 | 0 | 24 | 591 | 24.1 | 7.4 | 1.341% | 1.000 | 0.309 | 0.368 | 0.000% | 0.000 | **0.5525** |
+| 2 | 2026-05-16 | [565363](https://www.instagram.com/reel/DYanO02oUAR/) | 2,029 | 21 | 2 | 41 | 1,351 | 35.8 | 7.6 | 1.035% | 0.772 | 0.212 | 0.219 | 0.099% | 0.196 | **0.4550** |
+| 3 | 2026-03-06 | [206069](https://www.instagram.com/reel/DVi3KOaiJn6/) | 420 | 3 | 1 | 11 | 286 | 27.1 | 6.3 | 0.714% | 0.532 | 0.233 | 0.251 | 0.238% | 0.473 | **0.4297** |
+| 4 | 2026-04-05 | [100294](https://www.instagram.com/reel/DWwni80CBrN/) | 2,139 | 3 | 2 | 98 | 1,294 | 43.3 | 31.1 | 0.140% | 0.105 | 0.718 | 1.000 | 0.094% | 0.186 | **0.4047** |
+| 5 | 2026-02-15 | [127147](https://www.instagram.com/reel/DUy0yFZiLbq/) | 839 | 4 | 0 | 16 | 503 | 12.5 | 6.7 | 0.477% | 0.355 | 0.539 | 0.722 | 0.000% | 0.000 | **0.3813** |
+| 6 | 2024-05-28 | [207047](https://www.instagram.com/reel/C7hXo85tW1J/) | 693 | 0 | 3 | 22 | 80 | 17.7 | 7.1 | 0.000% | 0.000 | 0.399 | 0.507 | 0.433% | 0.860 | **0.3734** |
+| 7 | 2026-01-09 | [835007](https://www.instagram.com/reel/DTSrKSZCFnc/) | 648 | 0 | 2 | 24 | 423 | 11.0 | 5.7 | 0.000% | 0.000 | 0.517 | 0.690 | 0.309% | 0.613 | **0.3689** |
+| 8 | 2024-09-19 | [200607](https://www.instagram.com/reel/DAHO8EQtGwE/) | 906 | 1 | 2 | 49 | 540 | 17.2 | 7.9 | 0.110% | 0.082 | 0.461 | 0.604 | 0.221% | 0.439 | **0.3342** |
+| 9 | 2025-10-17 | [010250](https://www.instagram.com/reel/DP6y6FLCAq0/) | 876 | 3 | 3 | 35 | 589 | 44.9 | 7.0 | 0.342% | 0.255 | 0.157 | 0.134 | 0.342% | 0.680 | **0.3236** |
+| 10 | 2025-09-01 | [069919](https://www.instagram.com/reel/DOETyn1iKnS/) | 596 | 0 | 3 | 32 | 409 | 46.6 | 10.4 | 0.000% | 0.000 | 0.223 | 0.235 | 0.503% | 1.000 | **0.3235** |
+| 11 | 2024-10-01 | [289797](https://www.instagram.com/reel/DAlvgu9Np51/) | 1,293 | 1 | 1 | 60 | 607 | 19.7 | 11.9 | 0.077% | 0.058 | 0.603 | 0.822 | 0.077% | 0.154 | **0.3206** |
+| 12 | 2026-01-14 | [133078](https://www.instagram.com/reel/DTgm74VCGph/) | 1,440 | 3 | 5 | 63 | 896 | 68.7 | 15.6 | 0.208% | 0.155 | 0.227 | 0.242 | 0.347% | 0.690 | **0.3160** |
+| 13 | 2024-10-02 | [761490](https://www.instagram.com/reel/DAohm0UtaGe/) | 576 | 0 | 1 | 32 | 342 | 12.0 | 6.5 | 0.000% | 0.000 | 0.542 | 0.728 | 0.174% | 0.345 | **0.3136** |
+| 14 | 2022-03-26 | [168236](https://www.instagram.com/reel/CblPFr9lDtb/) | 4,542 | 3 | 10 | 84 | 199 | 49.1 | 21.9 | 0.066% | 0.049 | 0.445 | 0.579 | 0.220% | 0.437 | **0.3118** |
+| 15 | 2026-04-26 | [470768](https://www.instagram.com/reel/DXl6ixno_6o/) | 540 | 3 | 1 | 29 | 352 | 49.1 | 7.2 | 0.556% | 0.414 | 0.147 | 0.118 | 0.185% | 0.368 | **0.3100** |
+| 16 | 2026-01-22 | [797692](https://www.instagram.com/reel/DT0Rh_OiPbh/) | 789 | 1 | 1 | 21 | 508 | 11.2 | 5.4 | 0.127% | 0.094 | 0.483 | 0.637 | 0.127% | 0.252 | **0.3033** |
+| 17 | 2026-03-05 | [435309](https://www.instagram.com/reel/DVg2JgbCC74/) | 715 | 2 | 1 | 29 | 481 | 19.2 | 6.6 | 0.280% | 0.209 | 0.344 | 0.423 | 0.140% | 0.278 | **0.2928** |
+| 18 | 2026-02-09 | [609163](https://www.instagram.com/reel/DUjcfDnCBfJ/) | 2,154 | 13 | 2 | 83 | 1,320 | 60.5 | 9.4 | 0.604% | 0.450 | 0.155 | 0.131 | 0.093% | 0.184 | **0.2839** |
+| 19 | 2026-03-07 | [552616](https://www.instagram.com/reel/DVmFKVQiNIu/) | 971 | 2 | 1 | 25 | 675 | 18.6 | 7.3 | 0.206% | 0.154 | 0.392 | 0.496 | 0.103% | 0.205 | **0.2733** |
+| 20 | 2026-02-28 | [038976](https://www.instagram.com/reel/DVTU-2AiICm/) | 506 | 0 | 1 | 24 | 327 | 22.4 | 9.7 | 0.000% | 0.000 | 0.432 | 0.558 | 0.198% | 0.393 | **0.2725** |
+
+## Filters specified but not applied
+
+§3 lists four more eligibility filters. Each is deliberately absent, not overlooked:
+
+| Filter | Why not applied |
+|---|---|
+| `days_since_repost >= 120` | No reposts exist yet — `trials.db` is unbuilt, so the filter is vacuously true. Wire it in when the publisher lands. |
+| `source_file_exists` | Needs the `library/` ↔ `media_id` mapping, which does not exist yet. Every candidate here still has to be matched to a source file before it can be re-cut. |
+| `is_seasonal` | Needs content tagging from Studio. Check the top of this queue by eye for dated material until then. |
+| `reach_30d >= 0.5 × median` | **Would actively harm the ranking.** It filters on `reach`, the field Phase 0 found corrupt for pre-2024 reels. Leave it out until reach is trustworthy. |
+
+## Dropped by the data-quality gate (36)
+
+These reels report a physically impossible ordering. Phase 0 traced it to `reach` being wrong by ~2 orders of magnitude on older media; the gate drops the row rather than trusting any of its numbers.
+
+| Posted | Reel | Detail |
+|---|---|---|
+| 2022-04-01 | 374633 | `likes=46 reach=14 views=1629` |
+| 2022-04-07 | 037570 | `likes=54 reach=18 views=3796` |
+| 2022-04-11 | 331289 | `likes=73 reach=15 views=3507` |
+| 2022-04-17 | 004582 | `likes=62 reach=11 views=3564` |
+| 2022-04-30 | 564777 | `likes=83 reach=12 views=5416` |
+| 2022-05-03 | 755425 | `likes=59 reach=17 views=2137` |
+| 2022-05-07 | 781311 | `likes=35 reach=19 views=564` |
+| 2022-05-11 | 706605 | `likes=60 reach=10 views=4570` |
+| 2022-05-23 | 948396 | `likes=70 reach=9 views=4014` |
+| 2022-06-09 | 622564 | `likes=25 reach=9 views=997` |
+| 2022-06-15 | 988075 | `likes=35 reach=8 views=889` |
+| 2022-06-24 | 217891 | `likes=25 reach=8 views=1288` |
+| 2022-07-17 | 053992 | `likes=50 reach=7 views=1899` |
+| 2022-07-24 | 710631 | `likes=31 reach=7 views=703` |
+| 2022-08-02 | 946219 | `likes=53 reach=6 views=1843` |
+| 2022-08-04 | 725685 | `likes=29 reach=9 views=470` |
+| 2022-08-13 | 179748 | `likes=29 reach=18 views=1752` |
+| 2022-09-21 | 543936 | `likes=48 reach=21 views=607` |
+| 2022-09-26 | 273893 | `likes=83 reach=16 views=4383` |
+| 2022-10-03 | 490110 | `likes=94 reach=10 views=2751` |
+| 2022-12-05 | 468003 | `likes=33 reach=10 views=385` |
+| 2022-12-25 | 419309 | `likes=69 reach=12 views=1536` |
+| 2023-01-03 | 889949 | `likes=31 reach=10 views=587` |
+| 2023-01-24 | 366275 | `likes=33 reach=12 views=642` |
+| 2023-03-13 | 688147 | `likes=23 reach=15 views=544` |
+| 2023-04-15 | 533656 | `likes=63 reach=15 views=521` |
+| 2023-04-23 | 244823 | `likes=51 reach=18 views=644` |
+| 2023-05-01 | 379762 | `likes=36 reach=18 views=481` |
+| 2023-07-02 | 089422 | `likes=38 reach=13 views=614` |
+| 2023-07-23 | 243429 | `likes=33 reach=21 views=563` |
+| 2023-08-05 | 555455 | `likes=31 reach=19 views=530` |
+| 2023-10-20 | 564746 | `likes=45 reach=19 views=821` |
+| 2023-11-14 | 515126 | `likes=43 reach=24 views=688` |
+| 2023-12-21 | 141467 | `likes=41 reach=30 views=1070` |
+| 2024-03-05 | 404971 | `likes=50 reach=37 views=718` |
+| 2024-03-08 | 058854 | `likes=46 reach=34 views=903` |
