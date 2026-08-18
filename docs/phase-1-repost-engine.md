@@ -2,6 +2,17 @@
 
 Buildable spec for the first thing that ships. Assumes Phase 0 (Meta app, token, capability probe, insights backfill) is done.
 
+> **Amended 2026-08-18 against live probe results.** Phase 0 ran and three
+> assumptions in this document turned out to be wrong. Changes are marked inline
+> with the same callout style as this one. Evidence:
+> [`reports/phase-0-findings.md`](../reports/phase-0-findings.md).
+>
+> - **Host:** every call goes to `graph.instagram.com` v26.0 (Instagram Login
+>   route), not `graph.facebook.com`.
+> - **`trial_params` works** → build the API path, not the §7 fallback.
+> - **`profile_visits` does not exist per-post for reels** → the scorer (§3) and
+>   the graduation rule (§6) both had to change.
+
 **Goal:** every day, without your involvement, take one proven old video, re-cut its hook, publish it as a Trial Reel to non-followers only, measure it against baseline at 72 hours, and graduate the winners to your feed.
 
 ---
@@ -29,6 +40,24 @@ probe:
 
 **Step 5 is the load-bearing one.** Create the container, inspect the response, then abandon it without calling `media_publish` — containers expire on their own in 24h. If it rejects `trial_params`, switch to the assisted-manual fallback in §7 and everything else in this spec stands unchanged.
 
+> **Ran 2026-08-18. Results:**
+>
+> | Step | Result |
+> |---|---|
+> | 1 | `MEDIA_CREATOR` on `graph.instagram.com` v26.0 — Instagram Login route |
+> | 2 | 1,676 followers — gate passed |
+> | 3 | 552 media readable |
+> | 4 | supported: `reach`, `views`, `likes`, `comments`, `shares`, `saved`, `total_interactions`, `ig_reels_avg_watch_time`, `ig_reels_video_view_total_time` · **unsupported: `profile_visits`, `follows`** |
+> | 5 | **`trial_params` accepted** — container `18619475482009797` created and abandoned. Do not publish it. |
+>
+> The probe hardcoded `graph.facebook.com`, which cannot parse an `IGAA`
+> Instagram-Login token; the error it returns is worded identically to a corrupt
+> token. `scripts/probe.py` now selects the host from the token prefix.
+>
+> Step 4 also had to be run twice per metric — several metrics only answer to
+> `metric_type=total_value`, and the error for omitting it is identical to
+> "metric not supported". A single-shape probe under-reports capability.
+
 ---
 
 ## 2. Insights backfill and snapshot schedule
@@ -44,6 +73,14 @@ Pull every historical post once, then snapshot on a fixed cadence relative to **
 | 30d | Final. Distinguishes evergreen from spike-and-die |
 
 Store every snapshot as a row, never overwrite. You want the *curve*, not the endpoint — a video still gaining reach on day 14 behaves completely differently from one that flatlined on day 2, and only the curve tells you which is which.
+
+> **Amended 2026-08-18.** The curve is **forward-only**. All 552 existing posts
+> are past 30 days old, so the backfill can record nothing but their `30d` row —
+> a post's 6h number cannot be reconstructed after the fact. Early-velocity
+> analysis is therefore impossible across the historical library and becomes
+> available only for posts published from 2026-08-18 onward. The eligibility
+> filter in §3 leans on `reach_30d`, which every historical post *does* have, so
+> the scorer is unaffected.
 
 **Schema sketch** (`data/posts.db`):
 
@@ -71,12 +108,16 @@ CREATE TABLE snapshots (
   comments      INTEGER,
   shares        INTEGER,       -- the signal that matters most
   saved         INTEGER,
-  profile_visits INTEGER,
-  follows       INTEGER,
   avg_watch_s   REAL,
   PRIMARY KEY (media_id, age_bucket)
 );
 ```
+
+> **Amended 2026-08-18.** `profile_visits` and `follows` columns removed — the
+> API does not return either for reels, so they would have been permanently
+> NULL. As implemented, `backfill.py` stores metrics as a JSON blob keyed by
+> metric name rather than as fixed columns, precisely so a capability change on
+> Meta's side does not require a migration.
 
 ---
 
@@ -101,13 +142,34 @@ eligible IF
 All components normalized to 0–1 across the eligible set (min-max over the cohort, so the weights mean something):
 
 ```
-score =  0.35 × norm(shares / reach)            -- sends: top-weighted 2026 signal
-       + 0.25 × norm(avg_watch_s / duration_s)  -- retention ratio
-       + 0.20 × norm(saved / reach)
-       + 0.20 × norm(profile_visits / reach)    -- did it make them curious about YOU
+score =  0.4375 × norm(shares / reach)            -- sends: top-weighted 2026 signal
+       + 0.3125 × norm(avg_watch_s / duration_s)  -- retention ratio
+       + 0.2500 × norm(saved / reach)
 ```
 
 Deliberately **not** in the formula: raw reach, and likes. Raw reach is confounded by how much distribution Instagram happened to give it that week. Likes are the weakest 2026 signal and including them would bias toward crowd-pleasing content that doesn't convert.
+
+> **Amended 2026-08-18.** A fourth term, `0.20 × norm(profile_visits / reach)`,
+> was removed: the Media Insights API does not support `profile_visits` for
+> reels on this account, so it is uncomputable. The three surviving weights are
+> the originals divided by 0.80, which preserves their relative ordering exactly.
+>
+> **This is the one place Phase 0 forced a judgment rather than a fact.** Two
+> alternatives were considered:
+> - *Substitute `total_interactions / reach`* — rejected. It contains shares and
+>   saves, which are already weighted here, so it double-counts them and drags
+>   the remainder toward likes.
+> - *Substitute account-level `profile_views`* — rejected. It is a daily
+>   account figure and cannot be attributed to one post, so it would add the
+>   same number to every candidate and change no ranking.
+>
+> Losing this term costs real information: the scorer can no longer distinguish
+> "people watched and shared it" from "people watched, shared it, and then went
+> looking at who made it". That second thing is what actually grows the funnel.
+> The compensation is that trial reels measure stranger-acquisition directly
+> (§6.2), so the signal returns at the *trial* stage even though it is absent at
+> the *candidate-selection* stage. Retune the weights from real trial evidence
+> after ~40 runs.
 
 Output: `reports/repost-queue.md`, top 20 ranked with their numbers, so the ranking is auditable rather than a black box.
 
@@ -141,17 +203,29 @@ CREATE TABLE trials (
   baseline_at_publish INTEGER, -- median trial reach at the time, frozen
   reach_72h     INTEGER,
   shares_72h    INTEGER,
-  profile_visits_72h INTEGER,
+  saved_72h     INTEGER,       -- decides GRADUATE vs HOOK_WON (see §6)
+  acct_profile_views_on_day INTEGER,
+                               -- account-level context ONLY, never a decision
+                               -- input: it is a whole-account daily figure
   verdict       TEXT,          -- graduate | hook_won | archive
   verdict_note  TEXT
 );
 ```
+
+> **Amended 2026-08-18.** `profile_visits_72h` removed — unavailable per-post
+> for reels, so it would have been permanently NULL. `saved_72h` takes its place
+> in the verdict logic. `acct_profile_views_on_day` is recorded deliberately as
+> *context you can look at later*, kept structurally separate from the columns
+> the verdict reads, so nobody is tempted to treat an account-wide daily number
+> as evidence about one trial.
 
 Freezing `baseline_at_publish` matters: as the account grows the baseline moves, and you need to compare each trial against the baseline *at its own moment*, not today's.
 
 ---
 
 ## 5. Publishing a trial reel
+
+All calls below go to **`https://graph.instagram.com/v26.0/`** — confirmed by the Phase 0 probe. Not `graph.facebook.com`.
 
 ```
 1. Upload render to VPS temp path → signed public URL (expires 2h)
@@ -174,7 +248,15 @@ Freezing `baseline_at_publish` matters: as the account grows the baseline moves,
 5. Write trials.db row, schedule the 72h review, revoke the signed URL
 ```
 
-**`MANUAL` graduation, deliberately.** `SS_PERFORMANCE` lets Instagram auto-graduate on its own performance notion — which can't see profile visits or follows, the two metrics that actually matter to your funnel. A reel can rack up views from people who will never care about guitar lessons. Keep the decision.
+**`MANUAL` graduation, deliberately.** `SS_PERFORMANCE` lets Instagram auto-graduate on its own performance notion, which optimises for watch time and little else. A reel can rack up views from people who will never care about guitar lessons. Keep the decision.
+
+> **Amended 2026-08-18.** The original wording justified `MANUAL` on the grounds
+> that Instagram "can't see profile visits or follows, the two metrics that
+> actually matter to your funnel". Neither is available to *you* per-post either,
+> so that argument no longer holds as stated. `MANUAL` is still right — it keeps
+> the graduation criteria yours and lets them improve as trial evidence
+> accumulates — but the honest reason is control, not an information advantage
+> you do not have.
 
 **Cadence:** one per day, published into the timing window the model derived from your own `online_followers` data. Rate limits are irrelevant at this volume.
 
@@ -191,14 +273,14 @@ baseline = median(reach_72h) over the last 20 trials
               follower seed) and mark the verdict low-confidence
 
            reach_72h ≥ 1.5 × baseline
-        AND profile_visits/reach ≥ account median
+        AND saved/reach ≥ account median
               → GRADUATE. Publish to followers and the grid.
                 Log what won and why.
 
            reach_72h ≥ 1.5 × baseline
-        AND profile_visits/reach < account median
+        AND saved/reach < account median
               → HOOK_WON, CONTENT DIDN'T.
-                The opening stopped people; the body didn't convert.
+                The opening stopped people; the body didn't hold them.
                 Reuse this hook on different material. Retire the clip.
 
            0.8 × baseline ≤ reach_72h < 1.5 × baseline
@@ -209,13 +291,37 @@ baseline = median(reach_72h) over the last 20 trials
                 half the dataset.
 ```
 
-The `HOOK_WON` branch is the one that pays off over time. Separating "did the opening work" from "did the content work" is the distinction that most creators never make, because without trial reels you can't isolate it cleanly.
+> **Amended 2026-08-18.** Both `GRADUATE` and `HOOK_WON` originally keyed on
+> `profile_visits/reach`, which does not exist per-post for reels. `saved/reach`
+> replaces it, and the substitution is **weaker in a way worth naming**:
+>
+> - *What was intended:* "did this make a stranger curious enough to go look at
+>   who I am" — a funnel signal, one step from a follow or an enquiry.
+> - *What is now measured:* "did a stranger think this was worth keeping" — an
+>   engagement signal that correlates with quality but says nothing about
+>   whether attention transferred from the clip to **you**.
+>
+> Record account-level `profile_views` for the trial day alongside each verdict
+> as context. Do **not** feed it into the decision: it is a whole-account daily
+> number, it moves for reasons unrelated to the trial, and treating it as
+> per-trial evidence would be the exact false precision this document exists to
+> avoid. After ~40 trials, check whether `saved/reach` on graduated trials
+> actually tracks follower growth — if it does not, this rule needs replacing
+> with something better, not defending.
+
+The `HOOK_WON` branch is still the one that pays off over time. Separating "did the opening work" from "did the content work" is the distinction that most creators never make, because without trial reels you can't isolate it cleanly — and that separation survives the metric change intact, since it rests on reach versus a body-quality proxy, not on which proxy you use.
 
 Results append to the weekly brief. After ~40 trials the Analyst has enough to state which hook types, lengths, and caption registers reliably beat baseline **for your audience specifically** — and the scorer's weights get retuned from your own evidence rather than from general advice.
 
 ---
 
 ## 7. Fallback if `trial_params` isn't available
+
+> **Not needed — but do not delete yet.** The Phase 0 probe confirmed Graph
+> accepts `trial_params`, so Phase 1 builds the API path in §5. This section
+> stays because acceptance is not proof the parameter is *honoured*: the first
+> real trial reel must be verified in-app as flagged "Trial" and absent from the
+> grid. If that check fails, everything below becomes live again.
 
 If the probe in §1 shows the API rejects `trial_params` on your account, nothing about this design changes except the last mile:
 
@@ -230,8 +336,9 @@ Worth noting: Buffer, Hootsuite, Sprout Social and similar can't schedule Trial 
 
 ## 8. Definition of done for Phase 1
 
-- [ ] `capabilities.json` written and the four §1 unknowns answered from the live account
+- [x] `capabilities.json` written and the §1 unknowns answered from the live account *(2026-08-18 — two of the four operating-plan §14 questions remain open; see `reports/phase-0-findings.md`)*
 - [ ] All historical posts backfilled with insights
+- [ ] **First trial reel verified in-app as an actual trial** — the check §7 depends on
 - [ ] Snapshot cron running on the five age buckets
 - [ ] Scorer produces a ranked, auditable `repost-queue.md`
 - [ ] At least 3 hook variants generated for the top queued video

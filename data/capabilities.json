@@ -1,0 +1,91 @@
+{
+  "probed_at": "2026-08-18T09:28:49.981120+00:00",
+  "host": "graph.instagram.com",
+  "graph_version": "v26.0",
+  "login_route": "instagram_login",
+  "account": {
+    "route": "instagram_login",
+    "host": "graph.instagram.com",
+    "ig_user_id": "27966737152965072",
+    "id": "27966737152965072",
+    "username": "fupingryuguitar",
+    "account_type": "MEDIA_CREATOR",
+    "followers_count": 1676,
+    "media_count": 552
+  },
+  "token": {
+    "introspection": "unavailable-on-instagram-login",
+    "note": "graph.instagram.com has no debug_token. Expiry is only readable via GET /refresh_access_token?grant_type=ig_refresh_token, which returns a NEW token and is therefore a state change -- run it deliberately, then update .env. Instagram long-lived tokens last 60 days from issue and are refreshable any time after 24h.",
+    "scopes": []
+  },
+  "gates": {
+    "followers_1000": true,
+    "scorer_inputs_available": [
+      "ig_reels_avg_watch_time",
+      "reach",
+      "saved",
+      "shares"
+    ],
+    "scorer_inputs_missing": [
+      "profile_visits"
+    ]
+  },
+  "media_metrics": {
+    "supported": [
+      "reach",
+      "views",
+      "likes",
+      "comments",
+      "shares",
+      "saved",
+      "total_interactions",
+      "ig_reels_avg_watch_time",
+      "ig_reels_video_view_total_time"
+    ],
+    "unsupported": {
+      "profile_visits": "The Media Insights API does not support the profile_visits metric for this media product type.",
+      "follows": "The Media Insights API does not support the follows metric for this media product type.",
+      "plays": "metric[0] must be one of the following values: impressions, shares, comments, likes, saved, replies, total_interactions, navigation, follows, profile_visits, profile_activity, reach, ig_reels_video_view_total_time, ig_reels_avg_watch_time, views, thread_replies, reposts, quotes, thread_shares, threads_views, threads_media_clicks, reels_skip_rate, threads_reposts, facebook_views, crossposted_views, total_views, total_likes, total_comments, link_clicks",
+      "impressions": "The Media Insights API does not support the impressions metric for this media product type.",
+      "video_views": "metric[0] must be one of the following values: impressions, shares, comments, likes, saved, replies, total_interactions, navigation, follows, profile_visits, profile_activity, reach, ig_reels_video_view_total_time, ig_reels_avg_watch_time, views, thread_replies, reposts, quotes, thread_shares, threads_views, threads_media_clicks, reels_skip_rate, threads_reposts, facebook_views, crossposted_views, total_views, total_likes, total_comments, link_clicks"
+    },
+    "request_shape": {
+      "reach": "plain",
+      "views": "plain",
+      "likes": "plain",
+      "comments": "plain",
+      "shares": "plain",
+      "saved": "plain",
+      "total_interactions": "plain",
+      "ig_reels_avg_watch_time": "plain",
+      "ig_reels_video_view_total_time": "plain"
+    }
+  },
+  "account_metrics": {
+    "supported": [
+      "reach",
+      "views",
+      "profile_views",
+      "website_clicks",
+      "accounts_engaged",
+      "total_interactions",
+      "follower_count"
+    ],
+    "unsupported": {},
+    "request_shape": {
+      "reach": "plain",
+      "views": "total_value",
+      "profile_views": "total_value",
+      "website_clicks": "total_value",
+      "accounts_engaged": "total_value",
+      "total_interactions": "total_value",
+      "follower_count": "plain"
+    }
+  },
+  "trial_params": {
+    "supported": true,
+    "confidence": "high",
+    "note": "Container was created unexpectedly. Do NOT publish it; unpublished containers expire on their own within 24h.",
+    "container_id": "18619475482009797"
+  }
+}

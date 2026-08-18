@@ -10,8 +10,17 @@ Nothing here publishes, deletes, or modifies anything. The one write-shaped call
 (the trial_params check) is deliberately built to fail before a container is
 created; see probe_trial_params().
 
+Two login routes exist and they do NOT share a host:
+
+    Instagram API with Instagram Login  -> token starts IGAA -> graph.instagram.com
+    Instagram API with Facebook Login   -> token starts EAA  -> graph.facebook.com
+
+Sending an IGAA token to graph.facebook.com returns
+"Invalid OAuth access token - Cannot parse access token" (code 190, no
+subcode), which reads exactly like a corrupt token and is not one. The probe
+picks the host from the token prefix and falls back to trying both.
+
 Usage:
-    export IG_ACCESS_TOKEN=...
     python scripts/probe.py
 
 Stdlib only -- no pip install, runs anywhere python3 does.
@@ -25,6 +34,11 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+HOSTS = {
+    "instagram_login": "graph.instagram.com",
+    "facebook_login": "graph.facebook.com",
+}
 
 # Newest first. The probe walks down until one answers, so we never hardcode a
 # guess about which version this account is on.
@@ -83,11 +97,11 @@ def load_dotenv(path=None):
 # ---------------------------------------------------------------- http
 
 
-def call(version, path, params, token, method="GET"):
+def call(host, version, path, params, token, method="GET"):
     """Return (ok, payload). Graph API errors come back as payloads, not raises."""
     params = dict(params or {})
     params["access_token"] = token
-    url = f"https://graph.facebook.com/{version}/{path.lstrip('/')}"
+    url = f"https://{host}/{version}/{path.lstrip('/')}"
 
     try:
         if method == "GET":
@@ -119,40 +133,63 @@ def err_text(payload):
 # ---------------------------------------------------------------- steps
 
 
-def detect_version(token):
-    """Returns (version, None) or (None, reason). Distinguishes 'network cannot
-    reach Graph' from 'Graph answered and rejected the token' -- those need
-    completely different fixes and look identical if you only check for success."""
+def host_order(token):
+    """Token prefix tells us the route. Try the likely host first, then the
+    other one -- a wrong guess costs one request, a wrong hardcode costs a day."""
+    if token.startswith("IGAA"):
+        return ["graph.instagram.com", "graph.facebook.com"]
+    if token.startswith("EAA"):
+        return ["graph.facebook.com", "graph.instagram.com"]
+    return ["graph.instagram.com", "graph.facebook.com"]
+
+
+def detect_endpoint(token):
+    """
+    Returns ((host, version), None) or (None, reason).
+
+    Distinguishes 'network cannot reach Graph' from 'Graph answered and
+    rejected the token' -- those need completely different fixes and look
+    identical if you only check for success.
+    """
     last_api_error = None
-    for version in CANDIDATE_VERSIONS:
-        ok, payload = call(version, "me", {"fields": "id"}, token)
-        if ok:
-            return version, None
-        if payload.get("__transport__"):
-            return None, ("network: cannot reach graph.facebook.com -- "
-                          f"{err_text(payload)}\n  Check proxy/firewall. Corporate and "
-                          "sandboxed networks frequently block Meta endpoints outright.")
-        last_api_error = err_text(payload)
-    return None, f"token: Graph answered but rejected the token on every version -- {last_api_error}"
+    for host in host_order(token):
+        for version in CANDIDATE_VERSIONS:
+            ok, payload = call(host, version, "me", {"fields": "id"}, token)
+            if ok:
+                return (host, version), None
+            if payload.get("__transport__"):
+                return None, ("network: cannot reach " + host + " -- "
+                              f"{err_text(payload)}\n  Check proxy/firewall. Corporate and "
+                              "sandboxed networks frequently block Meta endpoints outright.")
+            last_api_error = f"{host}: {err_text(payload)}"
+    return None, ("token: Graph answered but rejected the token on every host and "
+                  f"version -- {last_api_error}")
 
 
-def resolve_account(version, token):
+def resolve_account(host, version, token):
     """
     Two login flavours produce two token shapes:
       - Instagram API with Instagram Login -> /me IS the IG account
       - Facebook Login for Business        -> /me is a user; walk to the Page
     Try direct first, then the Page hop.
     """
-    ok, me = call(
-        version, "me",
-        {"fields": "id,username,account_type,followers_count,media_count"},
-        token,
-    )
+    route = "instagram_login" if host == "graph.instagram.com" else "facebook_login"
+
+    fields = "id,username,account_type,followers_count,media_count"
+    ok, me = call(host, version, "me", {"fields": fields}, token)
+    if not ok:
+        # user_id is the Instagram-Login spelling on some versions
+        ok, me = call(host, version, "me",
+                      {"fields": "id,user_id,username,followers_count,media_count"}, token)
     if ok and me.get("username"):
-        return {"route": "instagram_login", "ig_user_id": me["id"], **me}, None
+        return {"route": route, "host": host,
+                "ig_user_id": str(me.get("user_id") or me["id"]), **me}, None
+
+    if host == "graph.instagram.com":
+        return None, err_text(me)
 
     ok, pages = call(
-        version, "me/accounts",
+        host, version, "me/accounts",
         {"fields": "id,name,instagram_business_account{id,username,followers_count,media_count}"},
         token,
     )
@@ -164,6 +201,7 @@ def resolve_account(version, token):
         if iba:
             return {
                 "route": "facebook_login",
+                "host": host,
                 "page_id": page["id"],
                 "page_name": page.get("name"),
                 "ig_user_id": iba["id"],
@@ -175,9 +213,9 @@ def resolve_account(version, token):
     return None, "Token is valid but no Instagram Business account is linked to any Page."
 
 
-def newest_reel(version, ig_user_id, token):
+def newest_reel(host, version, ig_user_id, token):
     ok, payload = call(
-        version, f"{ig_user_id}/media",
+        host, version, f"{ig_user_id}/media",
         {"fields": "id,media_type,media_product_type,timestamp,permalink", "limit": 25},
         token,
     )
@@ -190,22 +228,35 @@ def newest_reel(version, ig_user_id, token):
     return (reels or media)[0], None
 
 
-def probe_metrics(version, node, candidates, token, extra=None):
-    """One request per metric. Slow, but it tells us exactly which ones exist."""
-    supported, unsupported = [], {}
+def probe_metrics(host, version, node, candidates, token, extra=None):
+    """
+    One request per metric. Slow, but it tells us exactly which ones exist.
+
+    Several metrics only answer when asked with metric_type=total_value; asking
+    without it returns an error that looks identical to 'unsupported'. We try
+    both shapes before calling a metric unavailable, and record which shape
+    worked so backfill.py can reuse it.
+    """
+    supported, unsupported, shapes = [], {}, {}
     for metric in candidates:
-        params = {"metric": metric}
+        base = {"metric": metric}
         if extra:
-            params.update(extra)
-        ok, payload = call(version, f"{node}/insights", params, token)
-        if ok and payload.get("data"):
-            supported.append(metric)
+            base.update(extra)
+
+        attempts = [("plain", base),
+                    ("total_value", {**base, "metric_type": "total_value"})]
+        for shape, params in attempts:
+            ok, payload = call(host, version, f"{node}/insights", params, token)
+            if ok and payload.get("data"):
+                supported.append(metric)
+                shapes[metric] = shape
+                break
         else:
             unsupported[metric] = err_text(payload)
-    return supported, unsupported
+    return supported, unsupported, shapes
 
 
-def probe_trial_params(version, ig_user_id, token):
+def probe_trial_params(host, version, ig_user_id, token):
     """
     Does the Content Publishing API accept trial_params on this account?
 
@@ -219,7 +270,7 @@ def probe_trial_params(version, ig_user_id, token):
     """
     sentinel = "https://example.invalid/third-stream-probe.mp4"
     ok, payload = call(
-        version, f"{ig_user_id}/media",
+        host, version, f"{ig_user_id}/media",
         {
             "media_type": "REELS",
             "video_url": sentinel,
@@ -261,25 +312,45 @@ def probe_trial_params(version, ig_user_id, token):
             "note": "Inconclusive -- read raw and judge manually.", "raw": err_text(payload)}
 
 
-def token_info(version, token):
-    ok, payload = call(version, "debug_token", {"input_token": token}, token)
-    if not ok:
+def token_info(host, version, token):
+    """
+    debug_token is a Facebook-host endpoint. Instagram Login tokens have no
+    equivalent introspection: the only way to read their expiry is
+    GET /refresh_access_token, which ISSUES A NEW TOKEN. probe.py promises not
+    to modify anything, so it does not call that -- it reports the gap instead
+    and tells you the command to run deliberately.
+    """
+    if host == "graph.facebook.com":
+        ok, payload = call(host, version, "debug_token", {"input_token": token}, token)
+        if ok:
+            data = payload.get("data", {})
+            expires = data.get("expires_at")
+            out = {
+                "introspection": "debug_token",
+                "type": data.get("type"),
+                "app_id": data.get("app_id"),
+                "scopes": data.get("scopes", []),
+                "expires_at": expires,
+            }
+            if expires:
+                dt = datetime.fromtimestamp(expires, tz=timezone.utc)
+                out["expires_at_iso"] = dt.isoformat()
+                out["days_remaining"] = round(
+                    (dt - datetime.now(timezone.utc)).total_seconds() / 86400, 1)
+            elif expires == 0:
+                out["expires_at_iso"] = "never"
+            return out
         return {"introspection": "unavailable", "note": err_text(payload)}
-    data = payload.get("data", {})
-    expires = data.get("expires_at")
-    out = {
-        "type": data.get("type"),
-        "app_id": data.get("app_id"),
-        "scopes": data.get("scopes", []),
-        "expires_at": expires,
+
+    return {
+        "introspection": "unavailable-on-instagram-login",
+        "note": "graph.instagram.com has no debug_token. Expiry is only readable via "
+                "GET /refresh_access_token?grant_type=ig_refresh_token, which returns a "
+                "NEW token and is therefore a state change -- run it deliberately, then "
+                "update .env. Instagram long-lived tokens last 60 days from issue and "
+                "are refreshable any time after 24h.",
+        "scopes": [],
     }
-    if expires:
-        dt = datetime.fromtimestamp(expires, tz=timezone.utc)
-        out["expires_at_iso"] = dt.isoformat()
-        out["days_remaining"] = round((dt - datetime.now(timezone.utc)).total_seconds() / 86400, 1)
-    elif expires == 0:
-        out["expires_at_iso"] = "never"
-    return out
 
 
 # ---------------------------------------------------------------- report
@@ -290,7 +361,7 @@ def line(label, value, indent=2):
 
 
 def main():
-    load_dotenv()
+    env_path = load_dotenv()
     token = os.environ.get("IG_ACCESS_TOKEN", "").strip()
     if not token:
         sys.exit("IG_ACCESS_TOKEN is not set (checked .env and the environment). "
@@ -298,15 +369,19 @@ def main():
 
     print("\n\033[1mThird Stream -- Phase 0 capability probe\033[0m")
     print("=" * 62)
+    if env_path:
+        print(f"  .env: {env_path}")
 
-    version, reason = detect_version(token)
-    if not version:
+    endpoint, reason = detect_endpoint(token)
+    if not endpoint:
         sys.exit(f"\n[1/6] FAILED -- {reason}\n\n"
                  "If the reason starts with 'token', re-run step 5 of docs/phase-0-setup.md.\n"
                  "If it starts with 'network', run this from your PC or the VPS instead.")
-    print(f"\n[1/6] Graph API version    {version}")
+    host, version = endpoint
+    route = "Instagram Login" if host == "graph.instagram.com" else "Facebook Login"
+    print(f"\n[1/6] Endpoint             {host}  {version}   ({route} route)")
 
-    account, error = resolve_account(version, token)
+    account, error = resolve_account(host, version, token)
     if error:
         sys.exit(f"\n[2/6] Account resolution FAILED\n  {error}")
     ig_user_id = account["ig_user_id"]
@@ -324,32 +399,32 @@ def main():
               f"not a bug.\033[0m")
 
     print("\n[3/6] Token")
-    tinfo = token_info(version, token)
+    tinfo = token_info(host, version, token)
     for k, v in tinfo.items():
         line(k, v if not isinstance(v, list) else ", ".join(v) or "(none)")
 
     print("\n[4/6] Media insights -- probing one metric at a time")
-    reel, error = newest_reel(version, ig_user_id, token)
-    media_supported, media_unsupported = [], {}
+    reel, error = newest_reel(host, version, ig_user_id, token)
+    media_supported, media_unsupported, media_shapes = [], {}, {}
     if error:
         print(f"  could not fetch media: {error}")
     else:
         print(f"  test media: {reel['id']}  ({reel.get('media_product_type', reel.get('media_type'))}, "
               f"{reel.get('timestamp', '')[:10]})")
-        media_supported, media_unsupported = probe_metrics(
-            version, reel["id"], CANDIDATE_MEDIA_METRICS, token
+        media_supported, media_unsupported, media_shapes = probe_metrics(
+            host, version, reel["id"], CANDIDATE_MEDIA_METRICS, token
         )
         print(f"\n  \033[32msupported ({len(media_supported)}):\033[0m {', '.join(media_supported) or 'none'}")
         print(f"  \033[2munsupported ({len(media_unsupported)}):\033[0m {', '.join(media_unsupported) or 'none'}")
 
     print("\n[5/6] Account insights")
-    acct_supported, acct_unsupported = probe_metrics(
-        version, ig_user_id, CANDIDATE_ACCOUNT_METRICS, token, extra={"period": "day"}
+    acct_supported, acct_unsupported, acct_shapes = probe_metrics(
+        host, version, ig_user_id, CANDIDATE_ACCOUNT_METRICS, token, extra={"period": "day"}
     )
     print(f"  \033[32msupported ({len(acct_supported)}):\033[0m {', '.join(acct_supported) or 'none'}")
 
     print("\n[6/6] trial_params support  (no container is published)")
-    trial = probe_trial_params(version, ig_user_id, token)
+    trial = probe_trial_params(host, version, ig_user_id, token)
     verdict = {True: "\033[32mSUPPORTED\033[0m",
                False: "\033[31mNOT SUPPORTED\033[0m",
                None: "\033[33mINCONCLUSIVE\033[0m"}[trial["supported"]]
@@ -366,7 +441,9 @@ def main():
 
     caps = {
         "probed_at": datetime.now(timezone.utc).isoformat(),
+        "host": host,
         "graph_version": version,
+        "login_route": account["route"],
         "account": account,
         "token": tinfo,
         "gates": {
@@ -374,8 +451,12 @@ def main():
             "scorer_inputs_available": sorted(have),
             "scorer_inputs_missing": sorted(missing),
         },
-        "media_metrics": {"supported": media_supported, "unsupported": media_unsupported},
-        "account_metrics": {"supported": acct_supported, "unsupported": acct_unsupported},
+        "media_metrics": {"supported": media_supported,
+                          "unsupported": media_unsupported,
+                          "request_shape": media_shapes},
+        "account_metrics": {"supported": acct_supported,
+                            "unsupported": acct_unsupported,
+                            "request_shape": acct_shapes},
         "trial_params": trial,
     }
 
@@ -394,9 +475,9 @@ def main():
          "all present" if not missing else f"MISSING {', '.join(sorted(missing))}")
     line("Q4  token lifetime",
          f"{tinfo.get('days_remaining', '?')} days" if tinfo.get("days_remaining")
-         else tinfo.get("expires_at_iso", "unknown"))
+         else "not introspectable on this route -- see [3/6]")
     print(f"\nWritten to {out}")
-    print("Next: python scripts/backfill.py\n")
+    print("Next: python scripts/backfill.py --full\n")
 
 
 if __name__ == "__main__":

@@ -64,6 +64,31 @@ Take the **Instagram login** route, not Facebook Login for Business. It's
 substantially fewer steps and it's what Meta is steering new apps toward. The
 probe script handles either, so this isn't a lock-in.
 
+> **Corrected 2026-08-18.** "The probe script handles either" was false when
+> written, and it cost a full setup session. `probe.py` sent every request to
+> `graph.facebook.com`, which **cannot parse an Instagram-Login token**. The
+> failure is:
+>
+> ```
+> Invalid OAuth access token - Cannot parse access token   (code 190, no subcode)
+> ```
+>
+> — wording that is indistinguishable from a truncated or corrupt token, so the
+> obvious response is to regenerate the token, which does not help.
+>
+> The routes do not share a host:
+>
+> | Route | Token prefix | Host |
+> |---|---|---|
+> | Instagram API with Instagram Login | `IGAA` | `graph.instagram.com` |
+> | Instagram API with Facebook Login | `EAA` | `graph.facebook.com` |
+>
+> `probe.py` now picks the host from the token prefix and falls back to trying
+> both, and records the winner in `capabilities.json` so every later script
+> follows it. If you ever see "Cannot parse access token" again, run
+> `python scripts/diagnose.py` — it separates a malformed token from a
+> wrong-host token in one call.
+
 ### 5. Generate the token
 In that same panel: add your Instagram account, then **Generate token**.
 

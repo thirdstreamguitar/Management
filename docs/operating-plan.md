@@ -50,14 +50,25 @@ non-follower reach → profile visits → follows → email/DM → paying studen
 
 So the system tracks **four ratios**, not raw counts:
 
-| Metric | Formula | Why it matters | Target |
-|---|---|---|---|
-| **Sends per reach** | `shares ÷ reach` | Mosseri has confirmed DM sends are the most heavily weighted Reels signal in 2026 — roughly 3–5× a like. This is *the* growth lever. | > 1.0% |
-| **Retention ratio** | `avg_watch_time ÷ video_duration` | Total watch time + replay rate is the #1 Reels ranking factor. | > 0.75 |
-| **Profile conversion** | `profile_visits ÷ reach` | Measures whether the content makes people curious about *you*, not just the clip. | > 1.5% |
-| **Follow efficiency** | `follows ÷ profile_visits` | Measures whether your profile/bio closes. Fix the bio, not the content, when this is low. | > 8% |
+| Metric | Formula | Why it matters | Target | Level |
+|---|---|---|---|---|
+| **Sends per reach** | `shares ÷ reach` | Mosseri has confirmed DM sends are the most heavily weighted Reels signal in 2026 — roughly 3–5× a like. This is *the* growth lever. | > 1.0% | per post |
+| **Retention ratio** | `avg_watch_time ÷ video_duration` | Total watch time + replay rate is the #1 Reels ranking factor. | > 0.75 | per post |
+| **Saves per reach** | `saved ÷ reach` | Saves rank second only to sends in 2026. Per-post and available — this carries the weight that profile conversion was meant to. | > 0.8% | per post |
+| **Profile conversion** | `profile_views ÷ reach` | Measures whether the content makes people curious about *you*, not just the clip. | > 1.5% | **account/day only** |
+| **Follow efficiency** | `follower_count` delta ÷ `profile_views` | Measures whether your profile/bio closes. Fix the bio, not the content, when this is low. | > 8% | **account/day only** |
 
-The last one is the cheapest to fix and the most commonly ignored. If 500 people visit the profile and 12 follow, the problem is the bio and the pinned three posts — not the reel.
+> **Corrected 2026-08-18 by the Phase 0 probe.** The last two were originally
+> specified per-post, as `profile_visits ÷ reach` and `follows ÷ profile_visits`.
+> The Media Insights API does **not** support `profile_visits` or `follows` for
+> reels on this account — see [`reports/phase-0-findings.md`](../reports/phase-0-findings.md).
+> Both survive only as **account-level daily** figures (`profile_views`,
+> `follower_count`), which cannot be attributed to an individual post. Anything
+> in this plan that ranked or judged a *single post* on profile conversion has
+> been rewritten. Treat the account-level versions as trend instruments — they
+> tell you whether the bio is closing this week, not which reel did it.
+
+Follow efficiency is still the cheapest thing to fix and the most commonly ignored. If 500 people visit the profile and 12 follow, the problem is the bio and the pinned three posts — not the reel. You just can no longer trace it to one reel.
 
 **Positioning note.** "Third stream" (the Schuller sense — jazz and classical as one language) is an unusually specific, defensible niche. Specificity is an asset on a recommendation-driven platform: the algorithm needs a coherent topic signal to know who to show you to. The system should reinforce that, not dilute it into generic guitar content.
 
@@ -69,13 +80,36 @@ The last one is the cheapest to fix and the most commonly ignored. If 500 people
 
 ### 2.1 Nightly: your own data
 
-A cron job on the VPS pulls from the Instagram Graph API and appends to a local database:
+A cron job on the VPS pulls from `graph.instagram.com` (**not** `graph.facebook.com` — see the route note below) and appends to a local database:
 
 - `GET /{ig-user-id}/media` — every post, with `id`, `media_type`, `caption`, `timestamp`, `permalink`
-- `GET /{ig-media-id}/insights` — `reach`, `views`, `likes`, `comments`, `shares`, `saved`, `total_interactions`, `profile_visits`, `follows`, `ig_reels_avg_watch_time`, `ig_reels_video_view_total_time`
-- `GET /{ig-user-id}/insights` — account-level reach, follower count, `follower_demographics` (age, gender, city, country), `online_followers`
+- `GET /{ig-media-id}/insights` — `reach`, `views`, `likes`, `comments`, `shares`, `saved`, `total_interactions`, `ig_reels_avg_watch_time`, `ig_reels_video_view_total_time`
+- `GET /{ig-user-id}/insights` — account-level `reach`, `views`, `profile_views`, `website_clicks`, `accounts_engaged`, `total_interactions`, `follower_count`
 
-Insights require a Professional account and 1,000+ followers — both true for you. Data is captured on a **schedule relative to post age** (6h, 24h, 72h, 7d, 30d), because a post's 24-hour number and its 30-day number tell you completely different things. A reel that keeps accumulating reach at day 14 is evergreen and is a repost candidate; a reel that spikes and dies is a one-off.
+> **Corrected 2026-08-18 by the Phase 0 probe.**
+> - **Route.** This account authenticates with **Instagram Login**, so every
+>   call goes to **`graph.instagram.com` v26.0**. An `IGAA`-prefixed token sent
+>   to `graph.facebook.com` returns *"Invalid OAuth access token — Cannot parse
+>   access token"*, which looks exactly like a corrupt token and is not one.
+> - **Removed:** `profile_visits` and `follows` — unsupported for reels.
+>   `plays`, `impressions`, `video_views` — not valid metric names on v26.0;
+>   `views` replaces all three.
+> - **Request shape.** `views`, `profile_views`, `website_clicks`,
+>   `accounts_engaged` and `total_interactions` only answer when asked with
+>   `metric_type=total_value`. Asking without it returns an error *identical* to
+>   "metric unsupported". `data/capabilities.json` records the working shape per
+>   metric; `backfill.py` reads it from there.
+> - **Not verified:** `follower_demographics` and `online_followers` were never
+>   probed. §5.2's timing model depends on `online_followers` — confirm it
+>   exists before building that, or the timing model has no input.
+
+Insights require a Professional account and 1,000+ followers — both confirmed: account type `MEDIA_CREATOR`, 1,676 followers. Data is captured on a **schedule relative to post age** (6h, 24h, 72h, 7d, 30d), because a post's 24-hour number and its 30-day number tell you completely different things. A reel that keeps accumulating reach at day 14 is evergreen and is a repost candidate; a reel that spikes and dies is a one-off.
+
+> **The curve is forward-only.** The 552 posts already in the account are all
+> past 30 days old, so the backfill can only ever record their `30d` row. The
+> 6h/24h/72h/7d shape exists solely for posts published from 2026-08-18 onward.
+> Any analysis comparing early velocity across the historical library is
+> impossible and should not be specified.
 
 ### 2.2 Weekly: the analysis session
 
@@ -202,11 +236,24 @@ Measuring non-follower reach through the API is awkward — the follower/non-fol
 Score every eligible past video:
 
 ```
-score =  0.35 × normalized(sends ÷ reach)
-       + 0.25 × normalized(avg_watch_time ÷ duration)
-       + 0.20 × normalized(saves ÷ reach)
-       + 0.20 × normalized(profile_visits ÷ reach)
+score =  0.4375 × normalized(sends ÷ reach)
+       + 0.3125 × normalized(avg_watch_time ÷ duration)
+       + 0.2500 × normalized(saves ÷ reach)
 ```
+
+> **Corrected 2026-08-18 by the Phase 0 probe.** The original formula carried a
+> fourth term, `0.20 × normalized(profile_visits ÷ reach)`. `profile_visits` is
+> not available per-post for reels, so that term cannot be computed. The
+> remaining three weights are the originals renormalised to sum to 1
+> (`0.35/0.80`, `0.25/0.80`, `0.20/0.80`), which preserves the intended
+> ordering — sends dominant, retention second, saves third.
+>
+> **This is a judgment call, not a measurement.** The alternative considered and
+> rejected was filling the vacant 0.20 with `total_interactions ÷ reach`; that
+> double-counts shares and saves, which are already weighted here, and drags the
+> scorer toward likes — the weakest 2026 signal, deliberately excluded below.
+> Revisit once ~40 trials give real evidence about which inputs predict
+> non-follower reach for this account.
 
 Eligibility filters:
 - age ≥ 90 days (audience has rotated)
@@ -231,11 +278,19 @@ Run **one trial reel per day**, changing **one variable at a time** where possib
 
 The API supports `trial_params` with `graduation_strategy` accepting `MANUAL` or `SS_PERFORMANCE` (Instagram auto-graduates on early performance).
 
-**Use `MANUAL`.** Auto-graduation optimizes for Instagram's notion of performance, not yours — it can't see profile visits or follows, which are the metrics you actually care about. The Analyst reviews at the 72-hour mark and graduates on your criteria:
+**Use `MANUAL`.** Auto-graduation optimizes for Instagram's notion of performance, not yours. The Analyst reviews at the 72-hour mark and graduates on your criteria:
 
-- Trial reach ≥ 1.5× your trial baseline → **graduate to followers**, add to the main grid
-- Reach ≥ baseline but weak profile conversion → **hook worked, content didn't** → keep the hook, retire the clip
+- Trial reach ≥ 1.5× your trial baseline **and** saves-per-reach ≥ account median → **graduate to followers**, add to the main grid
+- Reach ≥ 1.5× baseline but saves-per-reach below median → **hook worked, content didn't** → keep the hook, retire the clip
 - Reach < baseline → **archive the variant**, log why, move on
+
+> **Corrected 2026-08-18 by the Phase 0 probe.** The second test was originally
+> "weak profile conversion", using per-post `profile_visits`. That metric does
+> not exist for reels on this account, so the original rule was uncomputable.
+> `saved ÷ reach` replaces it as a **deliberately weaker proxy**: it measures
+> whether the body of the reel delivered enough to be worth keeping, which is
+> adjacent to — but not the same as — making someone curious about you.
+> Full reasoning in [`phase-1-repost-engine.md`](./phase-1-repost-engine.md) §6.
 
 Every result feeds back into Intelligence. After ~40 trials you have a genuine, data-backed model of what makes *your* audience stop scrolling — which is worth vastly more than any generic advice about the algorithm.
 
@@ -427,13 +482,22 @@ These are non-negotiable, because violating them can cost the account permanentl
 
 ---
 
-## 14. To verify before building
+## 14. Verified against the live account — 2026-08-18
 
-Honest flags — things I could not confirm from this environment, since `developers.facebook.com` and `instagram.com` are both blocked by the network proxy here:
+These were written as open questions because `developers.facebook.com` and `instagram.com` were both blocked by the network proxy this plan was drafted in. Phase 0's probe has now answered what it can. Full evidence: [`reports/phase-0-findings.md`](../reports/phase-0-findings.md), raw data in [`data/capabilities.json`](../data/capabilities.json).
 
-1. **`trial_params` / `graduation_strategy` in the Content Publishing API.** Corroborated by two independent sources (including a community n8n node citing the IG User Media reference), with values `MANUAL` and `SS_PERFORMANCE`. **Confirm in Graph API Explorer before building Phase 1 on it.** If the API doesn't support it on your account, the fallback is: the machine prepares the render + caption and hands you a one-tap upload, and you toggle "Trial" in the app manually — ~60 seconds a day rather than zero.
-2. **Publishing rate limit** — sources say 25, 50, or 100 per 24h. Irrelevant at your volume, but confirm before any bulk operation.
-3. **Whether media insights expose a follower / non-follower reach breakdown** on your API version. If not, trial reels cover the measurement need anyway (§6.2).
-4. **Regional monetization eligibility** for Subscriptions and Reels bonuses.
+1. **`trial_params` / `graduation_strategy`** — **CONFIRMED SUPPORTED.** Graph accepted `trial_params={"graduation_strategy":"MANUAL"}` on a `REELS` container and returned a container id. **Phase 1 builds the API path.** Caveat: acceptance is not proof the parameter is *honoured* — Graph sometimes ignores unknown parameters silently. The first real trial reel must be checked in-app to confirm it is flagged as a trial and absent from the grid. Keep §7's assisted-manual fallback documented but unbuilt until that check passes.
 
-Step zero of Phase 0 is a capability probe script that answers all four against your live account and writes the results here — so the plan gets corrected by reality before a line of pipeline code is written.
+2. **Publishing rate limit** — **STILL OPEN.** The probe does not exercise a publishing quota and nothing in `capabilities.json` bears on it. The 25 / 50 / 100 figures remain uncorroborated. Harmless at one trial per day; settle it by reading `X-App-Usage` headers during real publishing before any bulk operation.
+
+3. **Follower / non-follower reach breakdown** — **STILL OPEN, leaning no.** No standalone metric returns the split. But the probe tests metric *names* only and never sends a `breakdown` parameter, so it cannot rule out `breakdown=follow_type` on `reach`. Untested either way. Does not gate anything — §6.2's argument holds regardless.
+
+4. **Regional monetization eligibility** — **UNPROBED.** No API surface was touched. Check the Instagram app under Professional dashboard → Monetization. Gates nothing; §8 already ranks in-app monetization behind lessons and gigs.
+
+**What the probe found that this plan did not think to ask:**
+
+5. **`profile_visits` and `follows` do not exist per-post for reels.** This invalidated the four-ratio framework in §1, the nightly metric list in §2.1, the scorer in §6.3, and the graduation rule in §6.5 — all now amended above. This was the single most consequential Phase 0 finding and no amount of secondary-source reading would have surfaced it.
+
+6. **The account is on Instagram Login, not Facebook Login** — everything answers on `graph.instagram.com`, not `graph.facebook.com`. `docs/phase-0-setup.md` claimed the probe script handled either route; it did not, and the resulting error is indistinguishable from a corrupt token. Fixed in `scripts/probe.py`.
+
+7. **Historical posts can never have an early-velocity curve** — all 552 are past 30 days old, so only their `30d` row can ever exist. The curve begins with posts published from 2026-08-18 onward.

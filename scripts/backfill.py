@@ -100,12 +100,12 @@ def age_bucket(posted_at):
     return claimed
 
 
-def walk_media(version, ig_user_id, token, stop_at=None):
+def walk_media(host, version, ig_user_id, token, stop_at=None):
     """Page through /media newest-first. Stops early on incremental runs."""
     path, params = f"{ig_user_id}/media", {"fields": MEDIA_FIELDS, "limit": 50}
     seen = 0
     while True:
-        ok, payload = call(version, path, params, token)
+        ok, payload = call(host, version, path, params, token)
         if not ok:
             print(f"  ! media page failed: {err_text(payload)}")
             return
@@ -123,21 +123,43 @@ def walk_media(version, ig_user_id, token, stop_at=None):
         time.sleep(0.25)  # be a good citizen; we are nowhere near the rate limit
 
 
-def fetch_insights(version, media_id, metrics, token):
+def _values(payload):
+    out = {}
+    for e in payload.get("data", []):
+        vals = e.get("values") or []
+        if vals:
+            out[e["name"]] = vals[0].get("value")
+        elif e.get("total_value") is not None:
+            out[e["name"]] = e["total_value"].get("value")
+    return out
+
+
+def fetch_insights(host, version, media_id, metrics, shapes, token):
     """
     Ask for everything at once; on rejection, fall back to one-by-one so a
     single unsupported metric on one media type cannot blank the whole row.
+
+    `shapes` comes from capabilities.json and records which request form each
+    metric answered to during the probe -- plain, or metric_type=total_value.
+    Metrics of different shapes cannot be batched, so they are grouped.
     """
-    ok, payload = call(version, f"{media_id}/insights", {"metric": ",".join(metrics)}, token)
-    if ok:
-        return {e["name"]: e["values"][0].get("value") for e in payload.get("data", [])}
+    plain = [m for m in metrics if shapes.get(m, "plain") == "plain"]
+    totals = [m for m in metrics if shapes.get(m) == "total_value"]
 
     out = {}
-    for metric in metrics:
-        ok, payload = call(version, f"{media_id}/insights", {"metric": metric}, token)
+    for group, extra in ((plain, {}), (totals, {"metric_type": "total_value"})):
+        if not group:
+            continue
+        ok, payload = call(host, version, f"{media_id}/insights",
+                           {"metric": ",".join(group), **extra}, token)
         if ok:
-            for e in payload.get("data", []):
-                out[e["name"]] = e["values"][0].get("value")
+            out.update(_values(payload))
+            continue
+        for metric in group:
+            ok, payload = call(host, version, f"{media_id}/insights",
+                               {"metric": metric, **extra}, token)
+            if ok:
+                out.update(_values(payload))
     return out
 
 
@@ -154,14 +176,17 @@ def main():
 
     caps, metrics = load_caps()
     version = caps["graph_version"]
+    host = caps.get("host", "graph.facebook.com")
+    shapes = caps["media_metrics"].get("request_shape", {})
     ig_user_id = caps["account"]["ig_user_id"]
     acct_metrics = caps["account_metrics"]["supported"]
+    acct_shapes = caps["account_metrics"].get("request_shape", {})
 
     DB.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(DB)
     db.executescript(SCHEMA)
 
-    print(f"\nBackfill -- @{caps['account'].get('username')} on {version}")
+    print(f"\nBackfill -- @{caps['account'].get('username')} on {host} {version}")
     print(f"metrics: {', '.join(metrics)}\n")
 
     stop_at = None
@@ -172,7 +197,7 @@ def main():
     now = datetime.now(timezone.utc).isoformat()
     new_media = snaps_written = skipped = 0
 
-    for item in walk_media(version, ig_user_id, token, stop_at=stop_at):
+    for item in walk_media(host, version, ig_user_id, token, stop_at=stop_at):
         db.execute(
             """INSERT INTO media (media_id, media_type, product_type, permalink,
                                   caption, posted_at, first_seen)
@@ -197,7 +222,7 @@ def main():
         if exists:
             continue
 
-        values = fetch_insights(version, item["id"], metrics, token)
+        values = fetch_insights(host, version, item["id"], metrics, shapes, token)
         if not values:
             continue
         # like_count / comments_count come free on the media node
@@ -216,10 +241,15 @@ def main():
         time.sleep(0.2)
 
     if acct_metrics:
-        ok, payload = call(version, f"{ig_user_id}/insights",
-                           {"metric": ",".join(acct_metrics), "period": "day"}, token)
-        if ok:
-            values = {e["name"]: e["values"][0].get("value") for e in payload.get("data", [])}
+        values = {}
+        for metric in acct_metrics:
+            params = {"metric": metric, "period": "day"}
+            if acct_shapes.get(metric) == "total_value":
+                params["metric_type"] = "total_value"
+            ok, payload = call(host, version, f"{ig_user_id}/insights", params, token)
+            if ok:
+                values.update(_values(payload))
+        if values:
             db.execute("INSERT OR REPLACE INTO account_snapshots VALUES (?,?)",
                        (now, json.dumps(values)))
 
