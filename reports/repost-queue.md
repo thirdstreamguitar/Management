@@ -1,6 +1,6 @@
 # Repost queue
 
-**Generated:** 2026-08-18 14:50 UTC · **Source:** `/home/user/Management/data/posts.db` · **Cohort:** 85 eligible of 141 reels
+**Generated:** 2026-08-18 18:28 UTC · **Source:** `/home/user/Management/data/posts.db` · **Cohort:** 83 eligible of 141 reels
 
 Ranked by likelihood of acquiring non-followers when re-cut and republished as a trial reel. Spec: [`docs/phase-1-repost-engine.md`](../docs/phase-1-repost-engine.md) §3.
 
@@ -17,14 +17,14 @@ Every number below is shown so the ranking can be checked by eye: the raw rate, 
 | Stage | Count |
 |---|---:|
 | Reels in library | 141 |
-| — **excluded by hand** (never repost) | −2 |
-| — younger than 90 days | −17 |
+| — **excluded by hand** (never repost) | −8 |
+| — younger than 90 days | −15 |
 | — no insight snapshot | −0 |
-| — no `duration_s` | −1 |
+| — no `duration_s` | −0 |
 | — missing a scorer input | −0 |
 | — zero views | −0 |
-| — **failed gate** `likes ≤ reach ≤ views` | −36 |
-| **Eligible cohort** | **85** |
+| — **failed gate** `likes ≤ reach ≤ views` | −35 |
+| **Eligible cohort** | **83** |
 
 ## Normalisation ranges
 
@@ -52,33 +52,52 @@ Min-max is taken across the eligible cohort, so these bounds define the 0–1 sc
 | 10 | 2026-01-22 | [797692](https://www.instagram.com/reel/DT0Rh_OiPbh/) | 789 | 1 | 1 | 21 | 508 | 11.2 | 5.4 | 0.127% | 0.094 | 0.483 | 0.775 | 0.127% | 0.252 | **0.3464** |
 | 11 | 2025-09-01 | [069919](https://www.instagram.com/reel/DOETyn1iKnS/) | 596 | 0 | 3 | 32 | 409 | 46.6 | 10.4 | 0.000% | 0.000 | 0.223 | 0.286 | 0.503% | 1.000 | **0.3394** |
 | 12 | 2025-10-17 | [010250](https://www.instagram.com/reel/DP6y6FLCAq0/) | 876 | 3 | 3 | 35 | 589 | 44.9 | 7.0 | 0.342% | 0.255 | 0.157 | 0.163 | 0.342% | 0.680 | **0.3327** |
-| 13 | 2026-01-14 | [133078](https://www.instagram.com/reel/DTgm74VCGph/) ⚠ | 1,440 | 3 | 5 | 63 | 896 | 68.7 | 15.6 | 0.208% | 0.155 | 0.227 | 0.294 | 0.347% | 0.690 | **0.3323** |
-| 14 | 2026-03-05 | [435309](https://www.instagram.com/reel/DVg2JgbCC74/) | 715 | 2 | 1 | 29 | 481 | 19.2 | 6.6 | 0.280% | 0.209 | 0.344 | 0.514 | 0.140% | 0.278 | **0.3214** |
-| 15 | 2026-04-26 | [470768](https://www.instagram.com/reel/DXl6ixno_6o/) | 540 | 3 | 1 | 29 | 352 | 49.1 | 7.2 | 0.556% | 0.414 | 0.147 | 0.143 | 0.185% | 0.368 | **0.3180** |
-| 16 | 2026-02-28 | [038976](https://www.instagram.com/reel/DVTU-2AiICm/) | 506 | 0 | 1 | 24 | 327 | 22.4 | 9.7 | 0.000% | 0.000 | 0.432 | 0.678 | 0.198% | 0.393 | **0.3102** |
-| 17 | 2026-03-07 | [552616](https://www.instagram.com/reel/DVmFKVQiNIu/) | 971 | 2 | 1 | 25 | 675 | 18.6 | 7.3 | 0.206% | 0.154 | 0.392 | 0.603 | 0.103% | 0.205 | **0.3068** |
-| 18 | 2026-01-13 | [610541](https://www.instagram.com/reel/DTcrSG3CDFn/) | 628 | 0 | 1 | 26 | 420 | 12.8 | 5.7 | 0.000% | 0.000 | 0.444 | 0.701 | 0.159% | 0.316 | **0.2981** |
-| 19 | 2026-02-09 | [609163](https://www.instagram.com/reel/DUjcfDnCBfJ/) | 2,154 | 13 | 2 | 83 | 1,320 | 60.5 | 9.4 | 0.604% | 0.450 | 0.155 | 0.160 | 0.093% | 0.184 | **0.2928** |
-| 20 | 2025-08-17 | [588721](https://www.instagram.com/reel/DNeJRH8tR3V/) | 1,065 | 1 | 3 | 47 | 736 | 23.0 | 6.1 | 0.094% | 0.070 | 0.267 | 0.370 | 0.282% | 0.560 | **0.2860** |
+| 13 | 2026-03-05 | [435309](https://www.instagram.com/reel/DVg2JgbCC74/) | 715 | 2 | 1 | 29 | 481 | 19.2 | 6.6 | 0.280% | 0.209 | 0.344 | 0.514 | 0.140% | 0.278 | **0.3214** |
+| 14 | 2026-04-26 | [470768](https://www.instagram.com/reel/DXl6ixno_6o/) | 540 | 3 | 1 | 29 | 352 | 49.1 | 7.2 | 0.556% | 0.414 | 0.147 | 0.143 | 0.185% | 0.368 | **0.3180** |
+| 15 | 2026-02-28 | [038976](https://www.instagram.com/reel/DVTU-2AiICm/) | 506 | 0 | 1 | 24 | 327 | 22.4 | 9.7 | 0.000% | 0.000 | 0.432 | 0.678 | 0.198% | 0.393 | **0.3102** |
+| 16 | 2026-03-07 | [552616](https://www.instagram.com/reel/DVmFKVQiNIu/) | 971 | 2 | 1 | 25 | 675 | 18.6 | 7.3 | 0.206% | 0.154 | 0.392 | 0.603 | 0.103% | 0.205 | **0.3068** |
+| 17 | 2026-01-13 | [610541](https://www.instagram.com/reel/DTcrSG3CDFn/) | 628 | 0 | 1 | 26 | 420 | 12.8 | 5.7 | 0.000% | 0.000 | 0.444 | 0.701 | 0.159% | 0.316 | **0.2981** |
+| 18 | 2026-02-09 | [609163](https://www.instagram.com/reel/DUjcfDnCBfJ/) | 2,154 | 13 | 2 | 83 | 1,320 | 60.5 | 9.4 | 0.604% | 0.450 | 0.155 | 0.160 | 0.093% | 0.184 | **0.2928** |
+| 19 | 2025-08-17 | [588721](https://www.instagram.com/reel/DNeJRH8tR3V/) | 1,065 | 1 | 3 | 47 | 736 | 23.0 | 6.1 | 0.094% | 0.070 | 0.267 | 0.370 | 0.282% | 0.560 | **0.2860** |
+| 20 | 2025-08-22 | [066137](https://www.instagram.com/reel/DNqUWs2tzlZ/) | 521 | 0 | 1 | 15 | 326 | 18.0 | 6.9 | 0.000% | 0.000 | 0.382 | 0.585 | 0.192% | 0.381 | **0.2782** |
 
 ## ⚠ Confirm before publishing
 
-1 of the top 20 use forward-looking language. A reposted event promo tells people a gig is happening that already happened — check these before they go anywhere, and add any real promo to `data/repost-exclusions.json` so it never surfaces again.
-
-| # | Posted | Reel | Signals | Caption |
-|---:|---|---|---|---|
-| 13 | 2026-01-14 | 133078 | invitation, date+time | Dear friends in Vienna: I would like to invite you to MUK.jazz.afternoon at Porgy & Bess on the 26th of Januar |
+None of the top 20 trip the event-promotion detector.
 
 > The detector reads **forward-looking language only** — *tomorrow*, *see you there*, a date paired with a time. Venue @mentions are deliberately ignored: 36 of 141 reels carry one and most are past-tense recaps, which are exactly the good repost material. It flags for review and **never excludes on its own** — a false positive would quietly drop a good candidate with nothing to show for it.
 
-## Excluded by hand (2)
+## Excluded (8)
 
-From [`data/repost-exclusions.json`](../data/repost-exclusions.json). Versioned in git, not in the gitignored database, so this judgment survives every backfill rebuild.
+From [`data/repost-exclusions.json`](../data/repost-exclusions.json), versioned in git rather than in the gitignored database so it survives every backfill rebuild.
 
-| Posted | Reel | Reason |
-|---|---|---|
-| 2026-05-16 | 565363 | event_promo: Frau Mayer Latin Dance Party, 23 May 20:15. Date and venue are the content. |
-| 2026-04-05 | 100294 | event_promo: "Playing tomorrow at @miles.smiles.vienna, see you there". Made to fill a room on a specific night. |
+### Permanent — the footage is the advert (4)
+
+| Posted | Reel | By | Why |
+|---|---|---|---|
+| 2026-08-12 | [014103](https://www.instagram.com/reel/Db86Zbio1Rs/) | claude-proposed | "Latin Jazz Night 22.8 Sat 21:30 at Frau Mayer Rudolfsplatz 12, 1010 Wien". Full street address and a 14-second runtime - this is a flyer, not a performance. |
+| 2026-05-16 | [565363](https://www.instagram.com/reel/DYanO02oUAR/) | human | Frau Mayer Latin Dance Party, 23 May 20:15. Date and venue are the content. |
+| 2026-04-05 | [100294](https://www.instagram.com/reel/DWwni80CBrN/) | human | "Playing tomorrow at @miles.smiles.vienna, see you there". Made to fill a room on a specific night. |
+| 2026-01-17 | [198452](https://www.instagram.com/reel/DTnKsN3iBjn/) | claude-proposed | "Next week in @fraumayerwien ... Poster by @jwsst__" - the caption credits a poster designer, so the footage is the poster. Also the one reel durations.py could not read, so it was already outside the cohort. |
+
+### ⏳ Caption was dated, footage may be fine (4)
+
+**These are candidates on hold, not rejects.** A repost gets a new caption anyway, so if the footage carries no on-screen date, venue card or poster frame, the reel is repostable — delete its entry from the exclusions file and it re-enters the queue on the next run. Held out until then because reposting a real promotion misinforms people about a live date, and that is worse than a delayed candidate.
+
+| Posted | Reel | dur | Why it is held | What to check |
+|---|---|---:|---|---|
+| 2026-08-07 | [462250](https://www.instagram.com/reel/DbvlDuNoE1V/) | 42.4s | Caption is just "Tomorrow @fraumayerwien with @daviddolliner @avraimov.music", but 42 seconds and tagged #joepass #pacodelucia #jamsession - reads like playing, not an announcement. | Watch it. If there is no on-screen date or venue card, delete this entry - a new caption makes it repostable. |
+| 2026-01-14 | [133078](https://www.instagram.com/reel/DTgm74VCGph/) | 68.7s | Concert invitation for Porgy & Bess on 26 January - but the caption itself says "You are listening in the video to one of my latest composition: Island Songs", with the full 15-musician ensemble credited. The footage is the composition, not the advert. This one reached rank 13 of the queue. | Strongest reuse candidate of the four. Island Songs is evergreen material; only the concert pitch was dated. |
+| 2025-02-10 | [598825](https://www.instagram.com/reel/DF5i8SbN9Vq/) | 84.6s | Caption is a three-gig week schedule (@cafekorb, @atlas.wien, @fraumayerwien). 84 seconds, so the footage is almost certainly playing rather than a schedule card. | Watch it. Three dated gigs in the caption make reposting as-is clearly wrong, but the video may be fine. |
+| 2023-08-05 | [555455](https://www.instagram.com/reel/CvkGYUtvTiz/) | 89.7s | "Preparing for the gig tomorrow at @jazzcafezwe, here is a beautiful tune by @lukasgabric called Mahalo". The caption states outright that the video is a tune - the gig mention is incidental. | Almost certainly reusable. Check whether crediting @lukasgabric's composition needs carrying into the new caption. |
+
+### Reviewed and kept (1)
+
+Flagged by the detector, checked, and left in the queue — recorded so the same reel is not re-litigated every week.
+
+| Posted | Reel | Flagged as | Verdict |
+|---|---|---|---|
+| 2023-07-23 | [243429](https://www.instagram.com/reel/CvDGcE1AAbs/) | future verb ("upcoming") | "Practicing for the upcoming gigs!" names no date, no venue, no specific event. Reposting it cannot mislead anyone about a live show. This is the detector's one false positive across 141 reels. |
 
 ## Filters specified but not applied
 
@@ -91,7 +110,7 @@ From [`data/repost-exclusions.json`](../data/repost-exclusions.json). Versioned 
 | `is_seasonal` | **Partly handled.** Event promotion — the case that actually matters, since reposting one misinforms people about a live date — is caught by the hand-maintained exclusion list plus the ⚠ detector above. Genuine seasonal content (holidays, anniversaries) still needs Studio tagging. |
 | `reach_30d >= 0.5 × median` | **Would actively harm the ranking.** It filters on `reach`, the field Phase 0 found corrupt for pre-2024 reels. Leave it out until reach is trustworthy. |
 
-## Dropped by the data-quality gate (36)
+## Dropped by the data-quality gate (35)
 
 These reels report a physically impossible ordering. Phase 0 traced it to `reach` being wrong by ~2 orders of magnitude on older media; the gate drops the row rather than trusting any of its numbers.
 
@@ -127,7 +146,6 @@ These reels report a physically impossible ordering. Phase 0 traced it to `reach
 | 2023-05-01 | 379762 | `likes=36 reach=18 views=481` |
 | 2023-07-02 | 089422 | `likes=38 reach=13 views=614` |
 | 2023-07-23 | 243429 | `likes=33 reach=21 views=563` |
-| 2023-08-05 | 555455 | `likes=31 reach=19 views=530` |
 | 2023-10-20 | 564746 | `likes=45 reach=19 views=821` |
 | 2023-11-14 | 515126 | `likes=43 reach=24 views=688` |
 | 2023-12-21 | 141467 | `likes=41 reach=30 views=1070` |

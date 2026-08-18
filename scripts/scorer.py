@@ -153,7 +153,10 @@ def load_candidates(db_path):
         # reel that must not be republished whatever its numbers say.
         if media_id in excluded:
             e = excluded[media_id]
-            drop("excluded_by_human", f"{e.get('reason','')}: {e.get('note','')}")
+            counts["excluded_by_human"] += 1
+            rejections.append({"media_id": media_id, "posted": r["posted_at"][:10],
+                               "reason": "excluded_by_human", "record": e,
+                               "detail": f"{e.get('reason','')}: {e.get('note','')}"})
             continue
 
         if age_days < MIN_AGE_DAYS:
@@ -328,14 +331,55 @@ def write_report(ranked, ranges, rejections, totals, top_n, out_path, db_path):
 
     manual = [r for r in rejections if r["reason"] == "excluded_by_human"]
     if manual:
-        L.append(f"## Excluded by hand ({len(manual)})\n")
-        L.append("From [`data/repost-exclusions.json`](../data/repost-exclusions.json). "
-                 "Versioned in git, not in the gitignored database, so this judgment "
-                 "survives every backfill rebuild.\n")
-        L.append("| Posted | Reel | Reason |")
-        L.append("|---|---|---|")
-        for r_ in sorted(manual, key=lambda x: x["posted"], reverse=True):
-            L.append(f"| {r_['posted']} | {r_['media_id'][-6:]} | {r_['detail']} |")
+        recs = [(r_, r_.get("record", {})) for r_ in
+                sorted(manual, key=lambda x: x["posted"], reverse=True)]
+        pending = [(r_, e) for r_, e in recs if e.get("video_may_be_reusable")]
+        permanent = [(r_, e) for r_, e in recs if not e.get("video_may_be_reusable")]
+
+        L.append(f"## Excluded ({len(manual)})\n")
+        L.append("From [`data/repost-exclusions.json`](../data/repost-exclusions.json), "
+                 "versioned in git rather than in the gitignored database so it survives "
+                 "every backfill rebuild.\n")
+
+        if permanent:
+            L.append(f"### Permanent — the footage is the advert ({len(permanent)})\n")
+            L.append("| Posted | Reel | By | Why |")
+            L.append("|---|---|---|---|")
+            for r_, e in permanent:
+                L.append(f"| {r_['posted']} | [{r_['media_id'][-6:]}]({e.get('permalink','')}) "
+                         f"| {e.get('added_by','')} | {e.get('note','')} |")
+            L.append("")
+
+        if pending:
+            L.append(f"### ⏳ Caption was dated, footage may be fine ({len(pending)})\n")
+            L.append("**These are candidates on hold, not rejects.** A repost gets a new "
+                     "caption anyway, so if the footage carries no on-screen date, venue "
+                     "card or poster frame, the reel is repostable — delete its entry from "
+                     "the exclusions file and it re-enters the queue on the next run. "
+                     "Held out until then because reposting a real promotion misinforms "
+                     "people about a live date, and that is worse than a delayed "
+                     "candidate.\n")
+            L.append("| Posted | Reel | dur | Why it is held | What to check |")
+            L.append("|---|---|---:|---|---|")
+            for r_, e in pending:
+                dur = e.get("duration_s")
+                L.append(f"| {r_['posted']} | [{r_['media_id'][-6:]}]({e.get('permalink','')}) "
+                         f"| {dur if dur else '—'}s | {e.get('note','')} "
+                         f"| {e.get('action_needed','')} |")
+            L.append("")
+
+    reviewed = []
+    if EXCLUSIONS.exists():
+        reviewed = json.loads(EXCLUSIONS.read_text()).get("reviewed_not_excluded", [])
+    if reviewed:
+        L.append(f"### Reviewed and kept ({len(reviewed)})\n")
+        L.append("Flagged by the detector, checked, and left in the queue — recorded so "
+                 "the same reel is not re-litigated every week.\n")
+        L.append("| Posted | Reel | Flagged as | Verdict |")
+        L.append("|---|---|---|---|")
+        for x in reviewed:
+            L.append(f"| {x.get('posted','')} | [{x['media_id'][-6:]}]({x.get('permalink','')}) "
+                     f"| {x.get('flagged_as','')} | {x.get('note','')} |")
         L.append("")
 
     L.append("## Filters specified but not applied\n")
