@@ -34,6 +34,7 @@ Stdlib only.
 
 import argparse
 import json
+import re
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -48,6 +49,56 @@ MIN_AGE_DAYS = 90
 # Most mature first. A media can hold several snapshots; the 30d row is the
 # most complete measurement, so it wins when present.
 BUCKET_RANK = {"30d": 5, "7d": 4, "72h": 3, "24h": 2, "6h": 1}
+
+
+EXCLUSIONS = ROOT / "data" / "repost-exclusions.json"
+
+# Forward-looking language. A reposted event promo does not merely underperform
+# -- it announces a gig that already happened, and someone can turn up at a
+# venue on the wrong night. So this is a correctness guard, not a ranking tweak.
+#
+# Venue @mentions are deliberately NOT a signal. 36 of 141 reels mention one,
+# because the player gigs constantly, and most are past-tense recaps ("the other
+# night at @fraumayerwien") which are exactly the good repost material. Future
+# tense is what separates a promo from a performance clip.
+_MONTHS = r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)"
+PROMO_SIGNALS = {
+    "imminent": re.compile(
+        r"\b(tomorrow|tonight|this (?:evening|friday|saturday|sunday|weekend)"
+        r"|next (?:week|month|friday|saturday|sunday))\b", re.I),
+    "invitation": re.compile(
+        r"\b(see you there|see you tomorrow|invite you|join us|join me|save the date"
+        r"|don'?t miss|come by|entry free|free donation|tickets?|doors? open|rsvp)\b", re.I),
+    "date+time": re.compile(
+        rf"(\b\d{{1,2}}\s*[./]\s*\d{{1,2}}\b|\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:of\s+)?{_MONTHS}"
+        rf"|{_MONTHS}\w*\s+\d{{1,2}}\b).{{0,40}}?\b\d{{1,2}}[:.]\d{{2}}", re.I | re.S),
+    "future verb": re.compile(
+        r"\b(i'?ll be|we'?ll be|playing (?:tomorrow|this|next)|performing (?:tomorrow|this|next)"
+        r"|will be playing|upcoming)\b", re.I),
+}
+# Past-tense markers pull the score back down: "the other night at X" is a
+# performance recap, not an invitation.
+PROMO_PAST = re.compile(
+    r"\b(the other (?:day|night)|yesterday'?s?|last (?:night|week)|was recorded"
+    r"|from (?:the|my|our|yesterday)|a while ago|throwback)\b", re.I)
+
+
+def promo_flag(caption):
+    """(score, signals). >= 1 means review before publishing. Never auto-excludes:
+    a false positive would silently drop a good candidate with nothing to show
+    for it, and the human approval gate already catches what this misses."""
+    caption = caption or ""
+    hits = [name for name, rx in PROMO_SIGNALS.items() if rx.search(caption)]
+    return len(hits) - (1 if PROMO_PAST.search(caption) else 0), hits
+
+
+def load_exclusions():
+    """Human judgment, versioned in git rather than in the gitignored database
+    so it survives every backfill rebuild."""
+    if not EXCLUSIONS.exists():
+        return {}
+    data = json.loads(EXCLUSIONS.read_text())
+    return {e["media_id"]: e for e in data.get("excluded", [])}
 
 
 def norm(values):
@@ -70,7 +121,7 @@ def load_candidates(db_path):
     db.row_factory = sqlite3.Row
 
     rows = db.execute(
-        """SELECT media_id, permalink, posted_at, duration_s, product_type
+        """SELECT media_id, permalink, posted_at, duration_s, product_type, caption
            FROM media WHERE product_type = 'REELS' ORDER BY posted_at DESC"""
     ).fetchall()
 
@@ -81,11 +132,12 @@ def load_candidates(db_path):
             snaps[s["media_id"]] = (s["age_bucket"], json.loads(s["metrics"]))
     db.close()
 
+    excluded = load_exclusions()
     now = datetime.now(timezone.utc)
     candidates, rejections = [], []
     counts = {k: 0 for k in
-              ("too_young", "no_snapshot", "no_duration", "missing_metrics",
-               "zero_views", "failed_gate")}
+              ("excluded_by_human", "too_young", "no_snapshot", "no_duration",
+               "missing_metrics", "zero_views", "failed_gate")}
 
     for r in rows:
         media_id = r["media_id"]
@@ -96,6 +148,13 @@ def load_candidates(db_path):
             counts[reason] += 1
             rejections.append({"media_id": media_id, "posted": r["posted_at"][:10],
                                "reason": reason, "detail": detail})
+
+        # Human exclusions come first: never spend API calls or reasoning on a
+        # reel that must not be republished whatever its numbers say.
+        if media_id in excluded:
+            e = excluded[media_id]
+            drop("excluded_by_human", f"{e.get('reason','')}: {e.get('note','')}")
+            continue
 
         if age_days < MIN_AGE_DAYS:
             drop("too_young", f"{age_days:.0f}d")
@@ -137,8 +196,11 @@ def load_candidates(db_path):
             continue
 
         watch_s = watch_ms / 1000.0          # <- the millisecond conversion
+        p_score, p_hits = promo_flag(r["caption"])
         candidates.append({
             "media_id": media_id,
+            "caption": (r["caption"] or "").strip(),
+            "promo_score": p_score, "promo_hits": p_hits,
             "permalink": r["permalink"],
             "posted": r["posted_at"][:10],
             "age_days": age_days,
@@ -196,6 +258,7 @@ def write_report(ranked, ranges, rejections, totals, top_n, out_path, db_path):
     L.append("| Stage | Count |")
     L.append("|---|---:|")
     L.append(f"| Reels in library | {totals['reels']} |")
+    L.append(f"| — **excluded by hand** (never repost) | −{counts['excluded_by_human']} |")
     L.append(f"| — younger than {MIN_AGE_DAYS} days | −{counts['too_young']} |")
     L.append(f"| — no insight snapshot | −{counts['no_snapshot']} |")
     L.append(f"| — no `duration_s` | −{counts['no_duration']} |")
@@ -229,12 +292,50 @@ def write_report(ranked, ranges, rejections, totals, top_n, out_path, db_path):
         L.append("|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
         for i, c in enumerate(ranked[:top_n], 1):
             link = f"[{c['media_id'][-6:]}]({c['permalink']})" if c["permalink"] else c["media_id"][-6:]
+            if c["promo_score"] >= 1:
+                link += " ⚠"
             L.append(
                 f"| {i} | {c['posted']} | {link} | {c['views']:,} | {c['shares']:,} | "
                 f"{c['saved']:,} | {c['likes']:,} | {c['reach']:,} | {c['duration_s']:.1f} | "
                 f"{c['watch_s']:.1f} | {c['sends_rate']*100:.3f}% | {c['n_sends']:.3f} | "
                 f"{c['retention']:.3f} | {c['n_retention']:.3f} | "
                 f"{c['saves_rate']*100:.3f}% | {c['n_saves']:.3f} | **{c['score']:.4f}** |")
+        L.append("")
+
+    flagged = [c for c in ranked[:top_n] if c["promo_score"] >= 1]
+    L.append("## ⚠ Confirm before publishing\n")
+    if not flagged:
+        L.append(f"None of the top {min(top_n, n)} trip the event-promotion detector.\n")
+    else:
+        L.append(f"{len(flagged)} of the top {min(top_n, n)} use forward-looking language. "
+                 "A reposted event promo tells people a gig is happening that already "
+                 "happened — check these before they go anywhere, and add any real promo "
+                 "to `data/repost-exclusions.json` so it never surfaces again.\n")
+        L.append("| # | Posted | Reel | Signals | Caption |")
+        L.append("|---:|---|---|---|---|")
+        for c in flagged:
+            rank = ranked.index(c) + 1
+            cap = " ".join(c["caption"].split())[:110]
+            L.append(f"| {rank} | {c['posted']} | {c['media_id'][-6:]} | "
+                     f"{', '.join(c['promo_hits'])} | {cap} |")
+        L.append("")
+    L.append("> The detector reads **forward-looking language only** — *tomorrow*, "
+             "*see you there*, a date paired with a time. Venue @mentions are "
+             "deliberately ignored: 36 of 141 reels carry one and most are past-tense "
+             "recaps, which are exactly the good repost material. It flags for review "
+             "and **never excludes on its own** — a false positive would quietly drop a "
+             "good candidate with nothing to show for it.\n")
+
+    manual = [r for r in rejections if r["reason"] == "excluded_by_human"]
+    if manual:
+        L.append(f"## Excluded by hand ({len(manual)})\n")
+        L.append("From [`data/repost-exclusions.json`](../data/repost-exclusions.json). "
+                 "Versioned in git, not in the gitignored database, so this judgment "
+                 "survives every backfill rebuild.\n")
+        L.append("| Posted | Reel | Reason |")
+        L.append("|---|---|---|")
+        for r_ in sorted(manual, key=lambda x: x["posted"], reverse=True):
+            L.append(f"| {r_['posted']} | {r_['media_id'][-6:]} | {r_['detail']} |")
         L.append("")
 
     L.append("## Filters specified but not applied\n")
@@ -248,8 +349,11 @@ def write_report(ranked, ranges, rejections, totals, top_n, out_path, db_path):
     L.append("| `source_file_exists` | Needs the `library/` ↔ `media_id` mapping, "
              "which does not exist yet. Every candidate here still has to be "
              "matched to a source file before it can be re-cut. |")
-    L.append("| `is_seasonal` | Needs content tagging from Studio. Check the top "
-             "of this queue by eye for dated material until then. |")
+    L.append("| `is_seasonal` | **Partly handled.** Event promotion — the case that "
+             "actually matters, since reposting one misinforms people about a live "
+             "date — is caught by the hand-maintained exclusion list plus the ⚠ "
+             "detector above. Genuine seasonal content (holidays, anniversaries) "
+             "still needs Studio tagging. |")
     L.append("| `reach_30d >= 0.5 × median` | **Would actively harm the ranking.** "
              "It filters on `reach`, the field Phase 0 found corrupt for pre-2024 "
              "reels. Leave it out until reach is trustworthy. |")
@@ -296,7 +400,8 @@ def main():
 
     c = totals["counts"]
     print(f"\n  {totals['reels']} reels -> {len(ranked)} eligible")
-    print(f"  dropped: {c['too_young']} too young, {c['failed_gate']} failed gate, "
+    print(f"  dropped: {c['excluded_by_human']} excluded by hand, "
+          f"{c['too_young']} too young, {c['failed_gate']} failed gate, "
           f"{c['no_duration']} no duration, {c['missing_metrics']} missing metrics, "
           f"{c['no_snapshot']} no snapshot, {c['zero_views']} zero views")
 
@@ -309,6 +414,10 @@ def main():
                   f"{r['shares']:>5}{r['saved']:>5}{r['duration_s']:>7.1f}"
                   f"{r['watch_s']:>7.1f}{r['sends_rate']*100:>8.3f}%"
                   f"{r['retention']:>7.3f}{r['saves_rate']*100:>7.3f}%{r['score']:>8.4f}")
+        flagged = [x for x in ranked[:args.top] if x["promo_score"] >= 1]
+        if flagged:
+            print(f"\n  {len(flagged)} of the top {min(args.top, len(ranked))} flagged for "
+                  f"review (possible event promotion) -- see the report")
     print(f"\n  -> {out}\n")
 
 

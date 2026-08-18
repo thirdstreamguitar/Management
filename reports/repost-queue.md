@@ -1,6 +1,6 @@
 # Repost queue
 
-**Generated:** 2026-08-18 13:42 UTC · **Source:** `/home/user/Management/data/posts.db` · **Cohort:** 87 eligible of 141 reels
+**Generated:** 2026-08-18 14:50 UTC · **Source:** `/home/user/Management/data/posts.db` · **Cohort:** 85 eligible of 141 reels
 
 Ranked by likelihood of acquiring non-followers when re-cut and republished as a trial reel. Spec: [`docs/phase-1-repost-engine.md`](../docs/phase-1-repost-engine.md) §3.
 
@@ -17,13 +17,14 @@ Every number below is shown so the ranking can be checked by eye: the raw rate, 
 | Stage | Count |
 |---|---:|
 | Reels in library | 141 |
+| — **excluded by hand** (never repost) | −2 |
 | — younger than 90 days | −17 |
 | — no insight snapshot | −0 |
 | — no `duration_s` | −1 |
 | — missing a scorer input | −0 |
 | — zero views | −0 |
 | — **failed gate** `likes ≤ reach ≤ views` | −36 |
-| **Eligible cohort** | **87** |
+| **Eligible cohort** | **85** |
 
 ## Normalisation ranges
 
@@ -32,33 +33,52 @@ Min-max is taken across the eligible cohort, so these bounds define the 0–1 sc
 | Term | Min | Max | Note |
 |---|---:|---:|---|
 | `shares / views` | 0.000% | 1.341% |  |
-| `avg_watch_s / duration_s` | 0.070 | 0.718 |  |
+| `avg_watch_s / duration_s` | 0.070 | 0.603 |  |
 | `saved / views` | 0.000% | 0.503% |  |
 
 ## Top 20
 
 | # | Posted | Reel | views | shares | saved | likes | reach | dur s | watch s | shares/views | nSend | retention | nRet | saved/views | nSave | **score** |
 |---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 2026-04-11 | [500135](https://www.instagram.com/reel/DW_8CAqonwA/) | 820 | 11 | 0 | 24 | 591 | 24.1 | 7.4 | 1.341% | 1.000 | 0.309 | 0.368 | 0.000% | 0.000 | **0.5525** |
-| 2 | 2026-05-16 | [565363](https://www.instagram.com/reel/DYanO02oUAR/) | 2,029 | 21 | 2 | 41 | 1,351 | 35.8 | 7.6 | 1.035% | 0.772 | 0.212 | 0.219 | 0.099% | 0.196 | **0.4550** |
-| 3 | 2026-03-06 | [206069](https://www.instagram.com/reel/DVi3KOaiJn6/) | 420 | 3 | 1 | 11 | 286 | 27.1 | 6.3 | 0.714% | 0.532 | 0.233 | 0.251 | 0.238% | 0.473 | **0.4297** |
-| 4 | 2026-04-05 | [100294](https://www.instagram.com/reel/DWwni80CBrN/) | 2,139 | 3 | 2 | 98 | 1,294 | 43.3 | 31.1 | 0.140% | 0.105 | 0.718 | 1.000 | 0.094% | 0.186 | **0.4047** |
-| 5 | 2026-02-15 | [127147](https://www.instagram.com/reel/DUy0yFZiLbq/) | 839 | 4 | 0 | 16 | 503 | 12.5 | 6.7 | 0.477% | 0.355 | 0.539 | 0.722 | 0.000% | 0.000 | **0.3813** |
-| 6 | 2024-05-28 | [207047](https://www.instagram.com/reel/C7hXo85tW1J/) | 693 | 0 | 3 | 22 | 80 | 17.7 | 7.1 | 0.000% | 0.000 | 0.399 | 0.507 | 0.433% | 0.860 | **0.3734** |
-| 7 | 2026-01-09 | [835007](https://www.instagram.com/reel/DTSrKSZCFnc/) | 648 | 0 | 2 | 24 | 423 | 11.0 | 5.7 | 0.000% | 0.000 | 0.517 | 0.690 | 0.309% | 0.613 | **0.3689** |
-| 8 | 2024-09-19 | [200607](https://www.instagram.com/reel/DAHO8EQtGwE/) | 906 | 1 | 2 | 49 | 540 | 17.2 | 7.9 | 0.110% | 0.082 | 0.461 | 0.604 | 0.221% | 0.439 | **0.3342** |
-| 9 | 2025-10-17 | [010250](https://www.instagram.com/reel/DP6y6FLCAq0/) | 876 | 3 | 3 | 35 | 589 | 44.9 | 7.0 | 0.342% | 0.255 | 0.157 | 0.134 | 0.342% | 0.680 | **0.3236** |
-| 10 | 2025-09-01 | [069919](https://www.instagram.com/reel/DOETyn1iKnS/) | 596 | 0 | 3 | 32 | 409 | 46.6 | 10.4 | 0.000% | 0.000 | 0.223 | 0.235 | 0.503% | 1.000 | **0.3235** |
-| 11 | 2024-10-01 | [289797](https://www.instagram.com/reel/DAlvgu9Np51/) | 1,293 | 1 | 1 | 60 | 607 | 19.7 | 11.9 | 0.077% | 0.058 | 0.603 | 0.822 | 0.077% | 0.154 | **0.3206** |
-| 12 | 2026-01-14 | [133078](https://www.instagram.com/reel/DTgm74VCGph/) | 1,440 | 3 | 5 | 63 | 896 | 68.7 | 15.6 | 0.208% | 0.155 | 0.227 | 0.242 | 0.347% | 0.690 | **0.3160** |
-| 13 | 2024-10-02 | [761490](https://www.instagram.com/reel/DAohm0UtaGe/) | 576 | 0 | 1 | 32 | 342 | 12.0 | 6.5 | 0.000% | 0.000 | 0.542 | 0.728 | 0.174% | 0.345 | **0.3136** |
-| 14 | 2022-03-26 | [168236](https://www.instagram.com/reel/CblPFr9lDtb/) | 4,542 | 3 | 10 | 84 | 199 | 49.1 | 21.9 | 0.066% | 0.049 | 0.445 | 0.579 | 0.220% | 0.437 | **0.3118** |
-| 15 | 2026-04-26 | [470768](https://www.instagram.com/reel/DXl6ixno_6o/) | 540 | 3 | 1 | 29 | 352 | 49.1 | 7.2 | 0.556% | 0.414 | 0.147 | 0.118 | 0.185% | 0.368 | **0.3100** |
-| 16 | 2026-01-22 | [797692](https://www.instagram.com/reel/DT0Rh_OiPbh/) | 789 | 1 | 1 | 21 | 508 | 11.2 | 5.4 | 0.127% | 0.094 | 0.483 | 0.637 | 0.127% | 0.252 | **0.3033** |
-| 17 | 2026-03-05 | [435309](https://www.instagram.com/reel/DVg2JgbCC74/) | 715 | 2 | 1 | 29 | 481 | 19.2 | 6.6 | 0.280% | 0.209 | 0.344 | 0.423 | 0.140% | 0.278 | **0.2928** |
-| 18 | 2026-02-09 | [609163](https://www.instagram.com/reel/DUjcfDnCBfJ/) | 2,154 | 13 | 2 | 83 | 1,320 | 60.5 | 9.4 | 0.604% | 0.450 | 0.155 | 0.131 | 0.093% | 0.184 | **0.2839** |
-| 19 | 2026-03-07 | [552616](https://www.instagram.com/reel/DVmFKVQiNIu/) | 971 | 2 | 1 | 25 | 675 | 18.6 | 7.3 | 0.206% | 0.154 | 0.392 | 0.496 | 0.103% | 0.205 | **0.2733** |
-| 20 | 2026-02-28 | [038976](https://www.instagram.com/reel/DVTU-2AiICm/) | 506 | 0 | 1 | 24 | 327 | 22.4 | 9.7 | 0.000% | 0.000 | 0.432 | 0.558 | 0.198% | 0.393 | **0.2725** |
+| 1 | 2026-04-11 | [500135](https://www.instagram.com/reel/DW_8CAqonwA/) | 820 | 11 | 0 | 24 | 591 | 24.1 | 7.4 | 1.341% | 1.000 | 0.309 | 0.448 | 0.000% | 0.000 | **0.5774** |
+| 2 | 2026-03-06 | [206069](https://www.instagram.com/reel/DVi3KOaiJn6/) | 420 | 3 | 1 | 11 | 286 | 27.1 | 6.3 | 0.714% | 0.532 | 0.233 | 0.306 | 0.238% | 0.473 | **0.4467** |
+| 3 | 2026-02-15 | [127147](https://www.instagram.com/reel/DUy0yFZiLbq/) | 839 | 4 | 0 | 16 | 503 | 12.5 | 6.7 | 0.477% | 0.355 | 0.539 | 0.879 | 0.000% | 0.000 | **0.4301** |
+| 4 | 2026-01-09 | [835007](https://www.instagram.com/reel/DTSrKSZCFnc/) | 648 | 0 | 2 | 24 | 423 | 11.0 | 5.7 | 0.000% | 0.000 | 0.517 | 0.839 | 0.309% | 0.613 | **0.4155** |
+| 5 | 2024-05-28 | [207047](https://www.instagram.com/reel/C7hXo85tW1J/) | 693 | 0 | 3 | 22 | 80 | 17.7 | 7.1 | 0.000% | 0.000 | 0.399 | 0.616 | 0.433% | 0.860 | **0.4076** |
+| 6 | 2024-10-01 | [289797](https://www.instagram.com/reel/DAlvgu9Np51/) | 1,293 | 1 | 1 | 60 | 607 | 19.7 | 11.9 | 0.077% | 0.058 | 0.603 | 1.000 | 0.077% | 0.154 | **0.3761** |
+| 7 | 2024-09-19 | [200607](https://www.instagram.com/reel/DAHO8EQtGwE/) | 906 | 1 | 2 | 49 | 540 | 17.2 | 7.9 | 0.110% | 0.082 | 0.461 | 0.734 | 0.221% | 0.439 | **0.3750** |
+| 8 | 2024-10-02 | [761490](https://www.instagram.com/reel/DAohm0UtaGe/) | 576 | 0 | 1 | 32 | 342 | 12.0 | 6.5 | 0.000% | 0.000 | 0.542 | 0.885 | 0.174% | 0.345 | **0.3628** |
+| 9 | 2022-03-26 | [168236](https://www.instagram.com/reel/CblPFr9lDtb/) | 4,542 | 3 | 10 | 84 | 199 | 49.1 | 21.9 | 0.066% | 0.049 | 0.445 | 0.704 | 0.220% | 0.437 | **0.3509** |
+| 10 | 2026-01-22 | [797692](https://www.instagram.com/reel/DT0Rh_OiPbh/) | 789 | 1 | 1 | 21 | 508 | 11.2 | 5.4 | 0.127% | 0.094 | 0.483 | 0.775 | 0.127% | 0.252 | **0.3464** |
+| 11 | 2025-09-01 | [069919](https://www.instagram.com/reel/DOETyn1iKnS/) | 596 | 0 | 3 | 32 | 409 | 46.6 | 10.4 | 0.000% | 0.000 | 0.223 | 0.286 | 0.503% | 1.000 | **0.3394** |
+| 12 | 2025-10-17 | [010250](https://www.instagram.com/reel/DP6y6FLCAq0/) | 876 | 3 | 3 | 35 | 589 | 44.9 | 7.0 | 0.342% | 0.255 | 0.157 | 0.163 | 0.342% | 0.680 | **0.3327** |
+| 13 | 2026-01-14 | [133078](https://www.instagram.com/reel/DTgm74VCGph/) ⚠ | 1,440 | 3 | 5 | 63 | 896 | 68.7 | 15.6 | 0.208% | 0.155 | 0.227 | 0.294 | 0.347% | 0.690 | **0.3323** |
+| 14 | 2026-03-05 | [435309](https://www.instagram.com/reel/DVg2JgbCC74/) | 715 | 2 | 1 | 29 | 481 | 19.2 | 6.6 | 0.280% | 0.209 | 0.344 | 0.514 | 0.140% | 0.278 | **0.3214** |
+| 15 | 2026-04-26 | [470768](https://www.instagram.com/reel/DXl6ixno_6o/) | 540 | 3 | 1 | 29 | 352 | 49.1 | 7.2 | 0.556% | 0.414 | 0.147 | 0.143 | 0.185% | 0.368 | **0.3180** |
+| 16 | 2026-02-28 | [038976](https://www.instagram.com/reel/DVTU-2AiICm/) | 506 | 0 | 1 | 24 | 327 | 22.4 | 9.7 | 0.000% | 0.000 | 0.432 | 0.678 | 0.198% | 0.393 | **0.3102** |
+| 17 | 2026-03-07 | [552616](https://www.instagram.com/reel/DVmFKVQiNIu/) | 971 | 2 | 1 | 25 | 675 | 18.6 | 7.3 | 0.206% | 0.154 | 0.392 | 0.603 | 0.103% | 0.205 | **0.3068** |
+| 18 | 2026-01-13 | [610541](https://www.instagram.com/reel/DTcrSG3CDFn/) | 628 | 0 | 1 | 26 | 420 | 12.8 | 5.7 | 0.000% | 0.000 | 0.444 | 0.701 | 0.159% | 0.316 | **0.2981** |
+| 19 | 2026-02-09 | [609163](https://www.instagram.com/reel/DUjcfDnCBfJ/) | 2,154 | 13 | 2 | 83 | 1,320 | 60.5 | 9.4 | 0.604% | 0.450 | 0.155 | 0.160 | 0.093% | 0.184 | **0.2928** |
+| 20 | 2025-08-17 | [588721](https://www.instagram.com/reel/DNeJRH8tR3V/) | 1,065 | 1 | 3 | 47 | 736 | 23.0 | 6.1 | 0.094% | 0.070 | 0.267 | 0.370 | 0.282% | 0.560 | **0.2860** |
+
+## ⚠ Confirm before publishing
+
+1 of the top 20 use forward-looking language. A reposted event promo tells people a gig is happening that already happened — check these before they go anywhere, and add any real promo to `data/repost-exclusions.json` so it never surfaces again.
+
+| # | Posted | Reel | Signals | Caption |
+|---:|---|---|---|---|
+| 13 | 2026-01-14 | 133078 | invitation, date+time | Dear friends in Vienna: I would like to invite you to MUK.jazz.afternoon at Porgy & Bess on the 26th of Januar |
+
+> The detector reads **forward-looking language only** — *tomorrow*, *see you there*, a date paired with a time. Venue @mentions are deliberately ignored: 36 of 141 reels carry one and most are past-tense recaps, which are exactly the good repost material. It flags for review and **never excludes on its own** — a false positive would quietly drop a good candidate with nothing to show for it.
+
+## Excluded by hand (2)
+
+From [`data/repost-exclusions.json`](../data/repost-exclusions.json). Versioned in git, not in the gitignored database, so this judgment survives every backfill rebuild.
+
+| Posted | Reel | Reason |
+|---|---|---|
+| 2026-05-16 | 565363 | event_promo: Frau Mayer Latin Dance Party, 23 May 20:15. Date and venue are the content. |
+| 2026-04-05 | 100294 | event_promo: "Playing tomorrow at @miles.smiles.vienna, see you there". Made to fill a room on a specific night. |
 
 ## Filters specified but not applied
 
@@ -68,7 +88,7 @@ Min-max is taken across the eligible cohort, so these bounds define the 0–1 sc
 |---|---|
 | `days_since_repost >= 120` | No reposts exist yet — `trials.db` is unbuilt, so the filter is vacuously true. Wire it in when the publisher lands. |
 | `source_file_exists` | Needs the `library/` ↔ `media_id` mapping, which does not exist yet. Every candidate here still has to be matched to a source file before it can be re-cut. |
-| `is_seasonal` | Needs content tagging from Studio. Check the top of this queue by eye for dated material until then. |
+| `is_seasonal` | **Partly handled.** Event promotion — the case that actually matters, since reposting one misinforms people about a live date — is caught by the hand-maintained exclusion list plus the ⚠ detector above. Genuine seasonal content (holidays, anniversaries) still needs Studio tagging. |
 | `reach_30d >= 0.5 × median` | **Would actively harm the ranking.** It filters on `reach`, the field Phase 0 found corrupt for pre-2024 reels. Leave it out until reach is trustworthy. |
 
 ## Dropped by the data-quality gate (36)

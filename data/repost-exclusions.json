@@ -1,0 +1,30 @@
+{
+  "_purpose": "Reels that must never be reposted, as judged by a human. The scorer hard-excludes these.",
+  "_why_this_lives_in_git": "posts.db is gitignored and gets rebuilt by backfill.py. This is irreplaceable human judgment, so it is versioned, travels with the repo, and survives any database rebuild.",
+  "_reasons": {
+    "event_promo": "The video itself was made to promote a dated event. Reposting tells people a gig is happening that already happened - someone could turn up at a venue on the wrong night. Never repost, regardless of how it scores.",
+    "dated_claim": "Makes a time-bound claim that would be false today (a release, a collaboration announcement, a milestone).",
+    "rights": "Music, footage or a collaborator's likeness that cannot be re-published.",
+    "retired": "Superseded, or no longer represents the player."
+  },
+  "excluded": [
+    {
+      "media_id": "18044376290565363",
+      "permalink": "https://www.instagram.com/reel/DYanO02oUAR/",
+      "posted": "2026-05-16",
+      "reason": "event_promo",
+      "note": "Frau Mayer Latin Dance Party, 23 May 20:15. Date and venue are the content.",
+      "added": "2026-08-18",
+      "added_by": "human"
+    },
+    {
+      "media_id": "17924339715100294",
+      "permalink": "https://www.instagram.com/reel/DWwni80CBrN/",
+      "posted": "2026-04-05",
+      "reason": "event_promo",
+      "note": "\"Playing tomorrow at @miles.smiles.vienna, see you there\". Made to fill a room on a specific night.",
+      "added": "2026-08-18",
+      "added_by": "human"
+    }
+  ]
+}
