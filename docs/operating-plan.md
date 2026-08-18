@@ -105,11 +105,20 @@ A cron job on the VPS pulls from `graph.instagram.com` (**not** `graph.facebook.
 
 Insights require a Professional account and 1,000+ followers — both confirmed: account type `MEDIA_CREATOR`, 1,676 followers. Data is captured on a **schedule relative to post age** (6h, 24h, 72h, 7d, 30d), because a post's 24-hour number and its 30-day number tell you completely different things. A reel that keeps accumulating reach at day 14 is evergreen and is a repost candidate; a reel that spikes and dies is a one-off.
 
-> **The curve is forward-only.** The 552 posts already in the account are all
-> past 30 days old, so the backfill can only ever record their `30d` row. The
-> 6h/24h/72h/7d shape exists solely for posts published from 2026-08-18 onward.
-> Any analysis comparing early velocity across the historical library is
-> impossible and should not be specified.
+> **The curve is forward-only.** A snapshot claims only the *newest* age
+> threshold a post has already passed, so a post that is 200 days old when first
+> captured gets a `30d` row and can never retroactively acquire a `6h` one. The
+> complete five-point shape exists solely for posts published from 2026-08-18
+> onward. Comparing early velocity across the historical library is impossible
+> and should not be specified.
+>
+> Backfill actuals: 494 media, 303 snapshots — `30d`=288, `7d`=11, `72h`=2,
+> `24h`=1, `6h`=1.
+>
+> **Insights begin at April 2020.** 191 media posted between 2014-03-21 and
+> 2020-03-14 return no insights at all — a hard cutoff at the date the account
+> converted to Professional, which Instagram does not backfill across. All 191
+> are feed images, feed videos and one carousel; **no reel is affected**.
 
 ### 2.2 Weekly: the analysis session
 
@@ -500,4 +509,10 @@ These were written as open questions because `developers.facebook.com` and `inst
 
 6. **The account is on Instagram Login, not Facebook Login** — everything answers on `graph.instagram.com`, not `graph.facebook.com`. `docs/phase-0-setup.md` claimed the probe script handled either route; it did not, and the resulting error is indistinguishable from a corrupt token. Fixed in `scripts/probe.py`.
 
-7. **Historical posts can never have an early-velocity curve** — all 552 are past 30 days old, so only their `30d` row can ever exist. The curve begins with posts published from 2026-08-18 onward.
+7. **Historical posts can never have an early-velocity curve** — a snapshot claims only the newest threshold a post has already passed, so anything older than 30 days at first capture gets a `30d` row and nothing earlier, permanently. The complete curve begins with posts published from 2026-08-18 onward.
+
+8. **Insights do not exist before April 2020** — 191 of 494 media predate the account's conversion to Professional and return nothing. No reel is affected.
+
+9. **The reel library is 141 posts, not 552** — of which 124 are ≥90 days old and carry every surviving scorer input. That, not the raw media count, is the repost engine's candidate pool.
+
+10. **`duration_s` is not available from the API at all** — no Instagram media field exposes video duration, so the retention term (31% of the scorer) cannot be computed without reading the source files locally with `ffprobe`. See `reports/phase-0-findings.md`.

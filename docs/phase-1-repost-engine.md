@@ -46,7 +46,7 @@ probe:
 > |---|---|
 > | 1 | `MEDIA_CREATOR` on `graph.instagram.com` v26.0 — Instagram Login route |
 > | 2 | 1,676 followers — gate passed |
-> | 3 | 552 media readable |
+> | 3 | `media_count` reports 552; the `/media` edge paginates to 494. 58 unreconciled — see findings |
 > | 4 | supported: `reach`, `views`, `likes`, `comments`, `shares`, `saved`, `total_interactions`, `ig_reels_avg_watch_time`, `ig_reels_video_view_total_time` · **unsupported: `profile_visits`, `follows`** |
 > | 5 | **`trial_params` accepted** — container `18619475482009797` created and abandoned. Do not publish it. |
 >
@@ -74,13 +74,19 @@ Pull every historical post once, then snapshot on a fixed cadence relative to **
 
 Store every snapshot as a row, never overwrite. You want the *curve*, not the endpoint — a video still gaining reach on day 14 behaves completely differently from one that flatlined on day 2, and only the curve tells you which is which.
 
-> **Amended 2026-08-18.** The curve is **forward-only**. All 552 existing posts
-> are past 30 days old, so the backfill can record nothing but their `30d` row —
-> a post's 6h number cannot be reconstructed after the fact. Early-velocity
-> analysis is therefore impossible across the historical library and becomes
-> available only for posts published from 2026-08-18 onward. The eligibility
-> filter in §3 leans on `reach_30d`, which every historical post *does* have, so
-> the scorer is unaffected.
+> **Amended 2026-08-18.** The curve is **forward-only**. A snapshot claims only
+> the *newest* threshold a post has already passed, so a post already older than
+> 30 days gets a `30d` row and can never acquire a `6h` one — the early number
+> cannot be reconstructed after the fact. The complete five-point curve exists
+> only for posts published from 2026-08-18 onward. The §3 eligibility filter
+> leans on `reach_30d`, which every post with insights does have, so the scorer
+> is unaffected.
+>
+> Backfill actuals: 494 media, 303 snapshots (`30d`=288, `7d`=11, `72h`=2,
+> `24h`=1, `6h`=1). The 191 media with no snapshot all predate April 2020, when
+> the account became Professional; Instagram does not backfill insights across
+> that boundary. **All 141 reels have complete insights** — the gap is entirely
+> old feed images and videos.
 
 **Schema sketch** (`data/posts.db`):
 
@@ -108,7 +114,7 @@ CREATE TABLE snapshots (
   comments      INTEGER,
   shares        INTEGER,       -- the signal that matters most
   saved         INTEGER,
-  avg_watch_s   REAL,
+  avg_watch_ms  INTEGER,       -- MILLISECONDS as returned; convert at read time
   PRIMARY KEY (media_id, age_bucket)
 );
 ```
@@ -170,6 +176,26 @@ Deliberately **not** in the formula: raw reach, and likes. Raw reach is confound
 > (§6.2), so the signal returns at the *trial* stage even though it is absent at
 > the *candidate-selection* stage. Retune the weights from real trial evidence
 > after ~40 runs.
+
+> **Blocked, not broken: the retention term needs `ffprobe`.** The backfill found
+> `duration_s` NULL on all 494 media, because **no Instagram media field exposes
+> video duration**. `avg_watch_s / duration_s` therefore has no denominator, and
+> that is 31% of the weight above.
+>
+> Duration is a property of the file, not of Instagram, so it is recoverable:
+> read it locally with `ffprobe` over `library/`, which this section already
+> requires to exist for the `source_file_exists` filter. **Build the
+> `library/` ↔ `media_id` mapping before the scorer, not after** — retention is
+> the second-strongest signal in the model and reweighting around it would leave
+> a two-signal proxy doing work the design does not intend.
+>
+> If that mapping turns out to be impractical, the fallback is `shares` 0.64 /
+> `saved` 0.36 — and the repost queue must then state on its face that it is
+> ranking on two signals, so nobody reads it as the full model.
+>
+> **Units:** `ig_reels_avg_watch_time` is returned in **milliseconds**
+> (sample: `14536` = 14.5s). Dividing it by a duration in seconds inflates the
+> ratio 1000×. Convert once, at ingest.
 
 Output: `reports/repost-queue.md`, top 20 ranked with their numbers, so the ranking is auditable rather than a black box.
 
@@ -337,7 +363,8 @@ Worth noting: Buffer, Hootsuite, Sprout Social and similar can't schedule Trial 
 ## 8. Definition of done for Phase 1
 
 - [x] `capabilities.json` written and the §1 unknowns answered from the live account *(2026-08-18 — two of the four operating-plan §14 questions remain open; see `reports/phase-0-findings.md`)*
-- [ ] All historical posts backfilled with insights
+- [x] All historical posts backfilled with insights *(494 media, 303 snapshots; 191 pre-April-2020 posts have no insights and never will — no reel affected)*
+- [ ] **`library/` ↔ `media_id` mapping + `ffprobe` durations** — blocks the retention term, 31% of the scorer
 - [ ] **First trial reel verified in-app as an actual trial** — the check §7 depends on
 - [ ] Snapshot cron running on the five age buckets
 - [ ] Scorer produces a ranked, auditable `repost-queue.md`

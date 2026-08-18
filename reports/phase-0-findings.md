@@ -1,6 +1,6 @@
 # Phase 0 findings — capability probe against the live account
 
-**Probed:** 2026-08-18T09:28:49Z · `@fupingryuguitar` · 1,676 followers · 552 media
+**Probed:** 2026-08-18T09:28:49Z · `@fupingryuguitar` · 1,676 followers · `media_count` 552 (the `/media` edge returns 494 — see the discrepancy note at the end)
 **Route:** Instagram API with Instagram Login → `graph.instagram.com` **v26.0**
 **Evidence:** [`data/capabilities.json`](../data/capabilities.json)
 
@@ -222,13 +222,117 @@ failure (§13, "Token hygiene"). Building it is a Phase 1 task, not a Phase 0 on
 
 ---
 
-## Backfill
+## Backfill — ran 2026-08-18
 
-Results appended once `scripts/backfill.py --full` completes. Expect one
-snapshot row per `(post, age_bucket)`; with 552 media all older than 30 days,
-the expectation is 552 rows in the `30d` bucket and none in the younger
-buckets — historical posts have already aged past every threshold, so a single
-backfill cannot reconstruct the 6h/24h/72h/7d curve for them. **The curve only
-exists for posts published from now on.** The plan's §2.1 claim that snapshots
-capture the curve is true going forward and untrue retroactively; the amended
-document says so.
+```
+494 media, 303 snapshots
+by bucket: 6h=1, 24h=1, 72h=2, 7d=11, 30d=288
+```
+
+### A prediction I got wrong
+
+Before the run I wrote that "all 552 posts are past 30 days old, so only their
+`30d` row can ever exist," and amended both plan documents to say so. **That was
+an assumption stated as fact, and it is false** — 15 posts are younger than 30
+days, which is why four younger buckets have rows. The account is actively
+posting; the most recent media is from 2026-08-17. Those documents have been
+corrected. Flagging it here rather than quietly fixing it, because asserting an
+unverified number is exactly the failure mode Phase 0 exists to catch, and I
+reproduced it.
+
+The *underlying* point survives, restated correctly: `age_bucket()` claims only
+the **newest** threshold a post has already passed, so a post that is 200 days
+old at first capture gets a `30d` row and can never retroactively acquire a
+`6h` one. A complete five-point curve therefore exists only for posts published
+from 2026-08-18 onward, as the nightly job catches each threshold in turn.
+
+### Why 303 snapshots and not 494
+
+191 media returned no insights at all, and the boundary is clean:
+
+| | Oldest | Newest |
+|---|---|---|
+| Media **with** insights | 2020-04-30 | 2026-08-17 |
+| Media **without** insights | 2014-03-21 | 2020-03-14 |
+
+A hard cutoff between March and April 2020, almost certainly the date the
+account converted to Professional — Instagram does not backfill insights for
+media posted before conversion. Those 191 posts (169 feed images, 21 feed
+videos, 1 carousel) are permanently metric-less. **No reel is affected.**
+
+### The library, by product type
+
+| Product type | Media type | Count |
+|---|---|---|
+| FEED | IMAGE | 227 |
+| **REELS** | **VIDEO** | **141** |
+| FEED | VIDEO | 81 |
+| FEED | CAROUSEL_ALBUM | 45 |
+
+**The repost engine's real candidate pool is 141, not 552.** Of those:
+
+- 141/141 have complete insights
+- **124** are ≥ 90 days old and therefore pass the §3 age filter
+- 124/124 carry all four surviving scorer inputs (`shares`, `saved`, `reach`,
+  `ig_reels_avg_watch_time`) with no nulls
+
+124 candidates against a planned one-trial-per-day cadence is roughly four
+months of testing before the pool needs the 120-day repost cooloff to recycle.
+Comfortable.
+
+---
+
+## A second scorer input is missing: `duration_s`
+
+**`duration_s` is NULL for all 494 media.** Nothing populates it, because the
+Instagram media node does not expose a video duration field — `backfill.py`
+cannot request what the API does not offer.
+
+This breaks the retention term:
+
+```
+0.3125 × norm(avg_watch_s / duration_s)      <- denominator does not exist
+```
+
+That is **31% of the scorer weight**, on top of the 20% already lost with
+`profile_visits`. Between them, half the originally-specified formula cannot be
+computed from API data alone.
+
+**This is recoverable, unlike `profile_visits`.** Duration is a property of the
+video file, not of Instagram, so it can be read locally with `ffprobe` over
+`library/` — which the plan already requires to exist for the source-file
+eligibility filter (§3: `source_file_exists == true`). The retention term is
+therefore *blocked on the library being populated and matched to media ids*, not
+lost. Until that mapping exists, the scorer runs on two terms and must say so
+rather than silently dividing by nothing.
+
+**Recommended for Phase 1, flagged as a decision not a finding:** do not reweight
+again. Build the `library/` ↔ `media_id` mapping first and recover the retention
+term, because retention is the second-strongest signal in the whole model and
+guessing around it would gut the scorer. If the mapping proves impractical, then
+reweight to `shares` 0.64 / `saved` 0.36 and record that the model is now a
+two-signal proxy.
+
+### Unit trap in the schema
+
+`ig_reels_avg_watch_time` comes back in **milliseconds** (sample value `14536`
+= 14.5s). The `phase-1-repost-engine.md` schema names the column `avg_watch_s`
+and the scorer divides it by a duration in seconds. Left alone this produces a
+retention ratio inflated by 1000×. The column is now documented as milliseconds.
+
+Related, and worth not assuming: `ig_reels_video_view_total_time` does **not**
+divide cleanly by either `views` or `reach` to reproduce
+`ig_reels_avg_watch_time` (4317226 / 480 ≈ 8994ms, / 238 ≈ 18139ms, against a
+reported 14536ms). The two are computed over different denominators. Do not
+derive one from the other.
+
+---
+
+## Remaining discrepancy, unresolved
+
+The probe reported `media_count: 552`; the `/media` edge paginated to **494**.
+58 media are unaccounted for. Not investigated. Candidates include story media,
+media excluded from the edge by type, or a `media_count` that counts something
+the edge does not return. It does not affect the reel pool — 141 reels were
+walked and all have insights — but the number should not be quietly reconciled
+by assuming one of the two is authoritative.
