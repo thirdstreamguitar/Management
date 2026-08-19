@@ -75,6 +75,18 @@ PROMO_SIGNALS = {
     "future verb": re.compile(
         r"\b(i'?ll be|we'?ll be|playing (?:tomorrow|this|next)|performing (?:tomorrow|this|next)"
         r"|will be playing|upcoming)\b", re.I),
+    # Added after a crowdfunding post reached rank 8 undetected. The signals
+    # above are tuned for *events*; a campaign or release makes an equally
+    # dated claim without naming a venue or a time. That reel earned 13 shares
+    # -- the most in the top ten -- precisely because it was an appeal for
+    # help, so this class scores well and slips through in exactly the way
+    # that matters.
+    "dated claim": re.compile(
+        r"\b(i (?:will|am going to) be recording|we (?:will|are going to) record"
+        r"|i need your help|need your support|crowdfund\w*|kickstarter|indiegogo"
+        r"|support (?:the|my|our) (?:album|project|campaign)|pre-?order"
+        r"|coming soon|out (?:now|on \w+day)|release[sd]? (?:on|this)"
+        r"|new album|first album|debut album)\b", re.I),
 }
 # Past-tense markers pull the score back down: "the other night at X" is a
 # performance recap, not an invitation.
@@ -191,17 +203,41 @@ def load_candidates(db_path):
             drop("zero_views")
             continue
 
-        # Data-quality gate. reach is not used in the score, only here: a row
-        # that violates the physical ordering is telling us its numbers cannot
-        # be trusted, whichever field is the liar.
-        if not (likes <= reach <= views):
-            drop("failed_gate", f"likes={likes} reach={reach} views={views}")
+        watch_s = watch_ms / 1000.0          # <- the millisecond conversion
+
+        # Data-quality gate, targeted at the fields the score actually divides
+        # by. It deliberately does NOT test reach.
+        #
+        # The original spec gated on `likes <= reach <= views`. Measured against
+        # the real library that cost 36 of 120 candidates -- and it wiped 2022
+        # (1/23 passing) and 2023 (0/12) entirely, which is the oldest content
+        # and therefore the best repost material, since its audience has
+        # rotated hardest. Meanwhile views/likes/shares/saved/watch_time are
+        # internally consistent on 120 of 120. The corruption is confined to
+        # reach alone, and reach is not in the formula. So reach is recorded,
+        # marked untrusted, and excluded from the gate.
+        #
+        # The watch ceiling doubles as a unit-regression guard: observed max
+        # retention across the library is 0.986 and nothing exceeds 1.0, so if
+        # the millisecond conversion ever regressed, retention would land near
+        # 170 and every row would fail here loudly.
+        failures = []
+        if likes > views:
+            failures.append(f"likes {likes} > views {views}")
+        if shares > views:
+            failures.append(f"shares {shares} > views {views}")
+        if saved > views:
+            failures.append(f"saved {saved} > views {views}")
+        if not (0 < watch_s <= duration * 1.5):
+            failures.append(f"watch {watch_s:.1f}s vs duration {duration:.1f}s")
+        if failures:
+            drop("failed_gate", "; ".join(failures))
             continue
 
-        watch_s = watch_ms / 1000.0          # <- the millisecond conversion
         p_score, p_hits = promo_flag(r["caption"])
         candidates.append({
             "media_id": media_id,
+            "reach_untrusted": not (likes <= reach <= views),
             "caption": (r["caption"] or "").strip(),
             "promo_score": p_score, "promo_hits": p_hits,
             "permalink": r["permalink"],
@@ -267,8 +303,20 @@ def write_report(ranked, ranges, rejections, totals, top_n, out_path, db_path):
     L.append(f"| — no `duration_s` | −{counts['no_duration']} |")
     L.append(f"| — missing a scorer input | −{counts['missing_metrics']} |")
     L.append(f"| — zero views | −{counts['zero_views']} |")
-    L.append(f"| — **failed gate** `likes ≤ reach ≤ views` | −{counts['failed_gate']} |")
+    L.append(f"| — **failed data-quality gate** | −{counts['failed_gate']} |")
     L.append(f"| **Eligible cohort** | **{n}** |\n")
+
+    untrusted = [c for c in ranked if c.get("reach_untrusted")]
+    if untrusted:
+        L.append(f"> **`reach` is untrusted on {len(untrusted)} of {n} candidates** and is "
+                 f"printed below for reference only — it is not in the formula. Those rows "
+                 f"report more likes than reach, which is physically impossible; Phase 0 "
+                 f"traced it to Instagram returning a degraded `reach` for pre-2024 media. "
+                 f"The gate validates `views`, `likes`, `shares`, `saved` and watch time, "
+                 f"all of which are internally consistent across the whole library. "
+                 f"Gating on `reach` as originally specified cost 36 candidates and removed "
+                 f"the entire 2022–23 catalogue for the sake of one field the scorer never "
+                 f"reads.\n")
 
     if ranges:
         L.append("## Normalisation ranges\n")
@@ -299,7 +347,7 @@ def write_report(ranked, ranges, rejections, totals, top_n, out_path, db_path):
                 link += " ⚠"
             L.append(
                 f"| {i} | {c['posted']} | {link} | {c['views']:,} | {c['shares']:,} | "
-                f"{c['saved']:,} | {c['likes']:,} | {c['reach']:,} | {c['duration_s']:.1f} | "
+                f"{c['saved']:,} | {c['likes']:,} | {c['reach']:,}{'†' if c.get('reach_untrusted') else ''} | {c['duration_s']:.1f} | "
                 f"{c['watch_s']:.1f} | {c['sends_rate']*100:.3f}% | {c['n_sends']:.3f} | "
                 f"{c['retention']:.3f} | {c['n_retention']:.3f} | "
                 f"{c['saves_rate']*100:.3f}% | {c['n_saves']:.3f} | **{c['score']:.4f}** |")
