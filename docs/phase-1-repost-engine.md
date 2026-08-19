@@ -162,8 +162,32 @@ score =  0.4375 × norm(shares / views)            -- sends: top-weighted 2026 s
 > and pushed all 88 legitimate candidates toward zero.** `views` is clean across
 > all 141. Full numbers in [`reports/phase-0-findings.md`](../reports/phase-0-findings.md).
 >
-> Add the gate `likes <= reach <= views` before scoring anyway. `views` fixes the
-> corruption we found; the gate catches what we have not.
+> **Amended 2026-08-19 — the gate no longer tests `reach`.** The original rule was
+> `likes <= reach <= views`. Measured against the real library it cost **36 of 120
+> candidates** and wiped **2022 (1 of 23 passing) and 2023 (0 of 12)** entirely —
+> the oldest content, and by this document's own logic the best repost material,
+> since its audience has rotated hardest. Meanwhile `views`, `likes`, `shares`,
+> `saved` and `ig_reels_avg_watch_time` are internally consistent on **120 of
+> 120**. The corruption is confined to `reach` alone, and `reach` is not in the
+> formula, so gating on it charged the whole back catalogue for one field the
+> scorer never reads.
+>
+> The gate now validates only what the score divides by:
+>
+> ```
+> likes  <= views
+> shares <= views
+> saved  <= views
+> 0 < avg_watch_s <= duration_s * 1.5
+> ```
+>
+> `reach` is still recorded, and the queue prints it marked `†` where it is
+> untrusted, so nobody reintroduces a reach-based rule without noticing.
+>
+> The watch ceiling doubles as a **unit-regression guard**: observed maximum
+> retention across the library is 0.986 and nothing exceeds 1.0, so if the
+> millisecond conversion ever regressed, every row would fail here loudly instead
+> of silently ranking on a 1000x inflated ratio.
 
 Deliberately **not** in the formula: raw reach, and likes. Raw reach is confounded by how much distribution Instagram happened to give it that week. Likes are the weakest 2026 signal and including them would bias toward crowd-pleasing content that doesn't convert.
 
@@ -238,6 +262,22 @@ For each queued video, Studio produces:
 > hook or cover variants.
 
 **Change one axis at a time.** Two changes and you learn nothing about either. The queue interleaves so you're not testing hooks for three straight weeks.
+
+> **A dated caption is not a dated video, and the distinction decides what gets
+> excluded at all.** Because a repost always gets a new caption, an old caption
+> that announced a gig is never republished — the pipeline simply must never copy
+> it forward. What genuinely cannot be reposted is dated *footage*: a flyer, an
+> animated poster, an on-screen date card.
+>
+> So `data/repost-exclusions.json` keeps only `video_is_promotional` entries as
+> permanent. Everything else — a gig announcement, an album campaign, a
+> three-date week schedule — is a **caption** problem that the variant step above
+> already solves, and those reels stay in the queue flagged `⚠` for a footage
+> check.
+>
+> Two hard rules for the publisher: **never reuse an original caption on a
+> flagged reel**, and **never publish a flagged reel until someone has confirmed
+> the footage carries no on-screen date.**
 
 Each variant is written as a row in `trials.db` **with its hypothesis recorded before publishing** — this is what turns posting into experimenting.
 
