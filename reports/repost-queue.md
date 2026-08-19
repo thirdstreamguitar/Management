@@ -1,6 +1,6 @@
 # Repost queue
 
-**Generated:** 2026-08-18 18:28 UTC · **Source:** `/home/user/Management/data/posts.db` · **Cohort:** 83 eligible of 141 reels
+**Generated:** 2026-08-19 08:34 UTC · **Source:** `/home/user/Management/data/posts.db` · **Cohort:** 84 eligible of 141 reels
 
 Ranked by likelihood of acquiring non-followers when re-cut and republished as a trial reel. Spec: [`docs/phase-1-repost-engine.md`](../docs/phase-1-repost-engine.md) §3.
 
@@ -17,14 +17,14 @@ Every number below is shown so the ranking can be checked by eye: the raw rate, 
 | Stage | Count |
 |---|---:|
 | Reels in library | 141 |
-| — **excluded by hand** (never repost) | −8 |
-| — younger than 90 days | −15 |
+| — **excluded by hand** (never repost) | −5 |
+| — younger than 90 days | −16 |
 | — no insight snapshot | −0 |
 | — no `duration_s` | −0 |
 | — missing a scorer input | −0 |
 | — zero views | −0 |
-| — **failed gate** `likes ≤ reach ≤ views` | −35 |
-| **Eligible cohort** | **83** |
+| — **failed gate** `likes ≤ reach ≤ views` | −36 |
+| **Eligible cohort** | **84** |
 
 ## Normalisation ranges
 
@@ -67,7 +67,7 @@ None of the top 20 trip the event-promotion detector.
 
 > The detector reads **forward-looking language only** — *tomorrow*, *see you there*, a date paired with a time. Venue @mentions are deliberately ignored: 36 of 141 reels carry one and most are past-tense recaps, which are exactly the good repost material. It flags for review and **never excludes on its own** — a false positive would quietly drop a good candidate with nothing to show for it.
 
-## Excluded (8)
+## Excluded (5)
 
 From [`data/repost-exclusions.json`](../data/repost-exclusions.json), versioned in git rather than in the gitignored database so it survives every backfill rebuild.
 
@@ -80,24 +80,24 @@ From [`data/repost-exclusions.json`](../data/repost-exclusions.json), versioned 
 | 2026-04-05 | [100294](https://www.instagram.com/reel/DWwni80CBrN/) | human | "Playing tomorrow at @miles.smiles.vienna, see you there". Made to fill a room on a specific night. |
 | 2026-01-17 | [198452](https://www.instagram.com/reel/DTnKsN3iBjn/) | claude-proposed | "Next week in @fraumayerwien ... Poster by @jwsst__" - the caption credits a poster designer, so the footage is the poster. Also the one reel durations.py could not read, so it was already outside the cohort. |
 
-### ⏳ Caption was dated, footage may be fine (4)
+### ⏳ Caption was dated, footage may be fine (1)
 
 **These are candidates on hold, not rejects.** A repost gets a new caption anyway, so if the footage carries no on-screen date, venue card or poster frame, the reel is repostable — delete its entry from the exclusions file and it re-enters the queue on the next run. Held out until then because reposting a real promotion misinforms people about a live date, and that is worse than a delayed candidate.
 
 | Posted | Reel | dur | Why it is held | What to check |
 |---|---|---:|---|---|
-| 2026-08-07 | [462250](https://www.instagram.com/reel/DbvlDuNoE1V/) | 42.4s | Caption is just "Tomorrow @fraumayerwien with @daviddolliner @avraimov.music", but 42 seconds and tagged #joepass #pacodelucia #jamsession - reads like playing, not an announcement. | Watch it. If there is no on-screen date or venue card, delete this entry - a new caption makes it repostable. |
 | 2026-01-14 | [133078](https://www.instagram.com/reel/DTgm74VCGph/) | 68.7s | Concert invitation for Porgy & Bess on 26 January - but the caption itself says "You are listening in the video to one of my latest composition: Island Songs", with the full 15-musician ensemble credited. The footage is the composition, not the advert. This one reached rank 13 of the queue. | Strongest reuse candidate of the four. Island Songs is evergreen material; only the concert pitch was dated. |
-| 2025-02-10 | [598825](https://www.instagram.com/reel/DF5i8SbN9Vq/) | 84.6s | Caption is a three-gig week schedule (@cafekorb, @atlas.wien, @fraumayerwien). 84 seconds, so the footage is almost certainly playing rather than a schedule card. | Watch it. Three dated gigs in the caption make reposting as-is clearly wrong, but the video may be fine. |
-| 2023-08-05 | [555455](https://www.instagram.com/reel/CvkGYUtvTiz/) | 89.7s | "Preparing for the gig tomorrow at @jazzcafezwe, here is a beautiful tune by @lukasgabric called Mahalo". The caption states outright that the video is a tune - the gig mention is incidental. | Almost certainly reusable. Check whether crediting @lukasgabric's composition needs carrying into the new caption. |
 
-### Reviewed and kept (1)
+### Reviewed and kept (4)
 
 Flagged by the detector, checked, and left in the queue — recorded so the same reel is not re-litigated every week.
 
 | Posted | Reel | Flagged as | Verdict |
 |---|---|---|---|
 | 2023-07-23 | [243429](https://www.instagram.com/reel/CvDGcE1AAbs/) | future verb ("upcoming") | "Practicing for the upcoming gigs!" names no date, no venue, no specific event. Reposting it cannot mislead anyone about a live show. This is the detector's one false positive across 141 reels. |
+| 2026-08-07 | [462250](https://www.instagram.com/reel/DbvlDuNoE1V/) | Caption is just "Tomorrow @fraumayerwien with @daviddolliner @avraimov.music", b | Human watched the video: no on-screen date, venue card or poster frame. The dated content was caption-only. |
+| 2025-02-10 | [598825](https://www.instagram.com/reel/DF5i8SbN9Vq/) | Caption is a three-gig week schedule (@cafekorb, @atlas.wien, @fraumayerwien). 8 | Human watched the video: no on-screen date, venue card or poster frame. The dated content was caption-only. |
+| 2023-08-05 | [555455](https://www.instagram.com/reel/CvkGYUtvTiz/) | "Preparing for the gig tomorrow at @jazzcafezwe, here is a beautiful tune by @lu | Human watched the video: no on-screen date, venue card or poster frame. The dated content was caption-only. |
 
 ## Filters specified but not applied
 
@@ -110,7 +110,7 @@ Flagged by the detector, checked, and left in the queue — recorded so the same
 | `is_seasonal` | **Partly handled.** Event promotion — the case that actually matters, since reposting one misinforms people about a live date — is caught by the hand-maintained exclusion list plus the ⚠ detector above. Genuine seasonal content (holidays, anniversaries) still needs Studio tagging. |
 | `reach_30d >= 0.5 × median` | **Would actively harm the ranking.** It filters on `reach`, the field Phase 0 found corrupt for pre-2024 reels. Leave it out until reach is trustworthy. |
 
-## Dropped by the data-quality gate (35)
+## Dropped by the data-quality gate (36)
 
 These reels report a physically impossible ordering. Phase 0 traced it to `reach` being wrong by ~2 orders of magnitude on older media; the gate drops the row rather than trusting any of its numbers.
 
@@ -146,6 +146,7 @@ These reels report a physically impossible ordering. Phase 0 traced it to `reach
 | 2023-05-01 | 379762 | `likes=36 reach=18 views=481` |
 | 2023-07-02 | 089422 | `likes=38 reach=13 views=614` |
 | 2023-07-23 | 243429 | `likes=33 reach=21 views=563` |
+| 2023-08-05 | 555455 | `likes=31 reach=19 views=530` |
 | 2023-10-20 | 564746 | `likes=45 reach=19 views=821` |
 | 2023-11-14 | 515126 | `likes=43 reach=24 views=688` |
 | 2023-12-21 | 141467 | `likes=41 reach=30 views=1070` |
